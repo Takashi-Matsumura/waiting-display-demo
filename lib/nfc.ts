@@ -26,10 +26,24 @@ let readerName = "";
 let readEvents: TicketReadEvent[] = [];
 let lastSeenUid = "";
 
+// カードが現在リーダーにかざされているか(card〜card.offの間 true)。
+// 受付画面が「かざされている間だけ」結果を表示するために使う。
+let cardPresent = false;
+
 // 発行(NDEF書込)モード: 次にタップされたカードへ payload を書き込む。
+// expectedUid が指定されている場合、タップされたカードのUIDがそれと異なれば書込を行わない
+// (「発行」完了ステップで、識別時に読んだタグと異なるタグへ誤って書き込むことを防ぐガード)。
 let pendingIssue: {
   payload: TicketPayload;
+  expectedUid?: string;
   resolve: (info: { uid: string }) => void;
+  reject: (err: Error) => void;
+} | null = null;
+
+// 識別(読取専用)モード: 次にタップされたカードのNDEFを読み取るだけで、書込は行わない。
+// 「発行」画面の最初のステップ(どの整理券のタグかを識別する)で使う。
+let pendingIdentify: {
+  resolve: (info: { uid: string; payload: TicketPayload | null; raw: string }) => void;
   reject: (err: Error) => void;
 } | null = null;
 
@@ -46,11 +60,15 @@ function ensureNfc() {
 
     reader.on("card", async (card: any) => {
       console.log(`[NFC] Card detected: UID=${card.uid}`);
+      cardPresent = true;
 
       // --- 発行(書込)モード ---
       if (await handlePendingIssue(reader, card)) return;
 
-      // --- 通常読取モード ---
+      // --- 識別(読取専用)モード ---
+      if (await handlePendingIdentify(reader, card)) return;
+
+      // --- 通常読取モード(受付/チェックイン用キュー) ---
       if (card.uid === lastSeenUid) return;
       lastSeenUid = card.uid;
 
@@ -69,6 +87,7 @@ function ensureNfc() {
 
     reader.on("card.off", (card: any) => {
       console.log(`[NFC] Card removed: UID=${card.uid}`);
+      cardPresent = false;
       if (card.uid === lastSeenUid) {
         lastSeenUid = "";
       }
@@ -83,6 +102,7 @@ function ensureNfc() {
       if (activeReader === reader) {
         activeReader = null;
         readerName = "";
+        cardPresent = false;
       }
     });
   });
@@ -96,13 +116,15 @@ function ensureNfc() {
 export function getStatus(): {
   connected: boolean;
   readerName: string;
-  mode: "idle" | "issuing";
+  mode: "idle" | "issuing" | "identifying";
+  cardPresent: boolean;
 } {
   ensureNfc();
   return {
     connected: activeReader !== null,
     readerName,
-    mode: pendingIssue !== null ? "issuing" : "idle",
+    mode: pendingIssue !== null ? "issuing" : pendingIdentify !== null ? "identifying" : "idle",
+    cardPresent,
   };
 }
 
@@ -117,11 +139,14 @@ export function drainReadEvents(): TicketReadEvent[] {
 /**
  * 次にタップされたカードへ整理券情報を NDEF Text レコードとして書き込み、
  * 書込に使われたカードの UID を解決する。
+ * `expectedUid` を指定すると、タップされたカードのUIDがそれと異なる場合は
+ * 書込を行わずエラーにする(「発行」完了ステップで、識別時と異なるタグへの誤書込を防ぐ)。
  */
 export function issueNextCard(
   payload: TicketPayload,
-  timeoutMs = 30000
+  opts: { timeoutMs?: number; expectedUid?: string } = {}
 ): Promise<{ uid: string }> {
+  const { timeoutMs = 30000, expectedUid } = opts;
   ensureNfc();
 
   if (!activeReader) {
@@ -143,6 +168,7 @@ export function issueNextCard(
 
     pendingIssue = {
       payload,
+      expectedUid,
       resolve: (info) => {
         clearTimeout(timer);
         resolve(info);
@@ -160,6 +186,54 @@ export function cancelIssue(): void {
   if (pendingIssue) {
     pendingIssue.reject(new Error("キャンセルされました。"));
     pendingIssue = null;
+  }
+}
+
+/**
+ * 次にタップされたカードのNDEFを読み取るだけで、書込は行わない(識別専用)。
+ * 「発行」画面の最初のステップで、タグに書かれている整理番号を読み取るために使う。
+ */
+export function identifyNextCard(
+  timeoutMs = 30000
+): Promise<{ uid: string; payload: TicketPayload | null; raw: string }> {
+  ensureNfc();
+
+  if (!activeReader) {
+    return Promise.reject(new Error("NFCリーダーが接続されていません。"));
+  }
+
+  if (pendingIdentify) {
+    pendingIdentify.reject(new Error("新しい識別リクエストで上書きされました。"));
+    pendingIdentify = null;
+  }
+
+  return new Promise((resolve, reject) => {
+    const entry: NonNullable<typeof pendingIdentify> = {
+      resolve: (info) => {
+        clearTimeout(timer);
+        resolve(info);
+      },
+      reject: (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    };
+    const timer = setTimeout(() => {
+      if (pendingIdentify === entry) {
+        pendingIdentify = null;
+        reject(new Error("タイムアウト: カードが検出されませんでした。"));
+      }
+    }, timeoutMs);
+
+    pendingIdentify = entry;
+  });
+}
+
+/** 識別アームを取り消す。 */
+export function cancelIdentify(): void {
+  if (pendingIdentify) {
+    pendingIdentify.reject(new Error("キャンセルされました。"));
+    pendingIdentify = null;
   }
 }
 
@@ -296,6 +370,17 @@ function declaredNdefMessageLength(buf: Buffer): { offset: number; length: numbe
 async function handlePendingIssue(reader: any, card: any): Promise<boolean> {
   if (!pendingIssue) return false;
 
+  // expectedUid が指定されていて、タップされたカードが異なる場合は書込を行わない。
+  // アームは解除せず維持する(pendingIssueをnullにしない)ことで、オペレーターが
+  // 正しいタグを改めてかざせばそのままリクエストが成立する(別タグへの誤書込を防ぎつつ、
+  // タイムアウトまでリトライ可能にする)。
+  if (pendingIssue.expectedUid !== undefined && card.uid !== pendingIssue.expectedUid) {
+    console.log(
+      `[NFC] Ignoring tap from unexpected UID=${card.uid} (expected ${pendingIssue.expectedUid})`
+    );
+    return true;
+  }
+
   const req = pendingIssue;
   pendingIssue = null;
 
@@ -321,6 +406,26 @@ async function handlePendingIssue(reader: any, card: any): Promise<boolean> {
     console.error(`[NFC] NDEF write failed:`, err);
     const message = err instanceof Error ? err.message : String(err);
     req.reject(new Error(`書き込みに失敗しました: ${message}`));
+  }
+
+  return true;
+}
+
+/** 識別アーム中に card イベントが来た場合、NDEFを読み取るだけで解決する。処理した場合 true を返す。 */
+async function handlePendingIdentify(reader: any, card: any): Promise<boolean> {
+  if (!pendingIdentify) return false;
+
+  const req = pendingIdentify;
+  pendingIdentify = null;
+
+  try {
+    const raw = await readNdef(reader);
+    const payload = raw ? decodeTicketPayload(raw) : null;
+    req.resolve({ uid: card.uid, payload, raw: raw ?? "" });
+  } catch (err) {
+    console.error(`[NFC] Identify read failed:`, err);
+    const message = err instanceof Error ? err.message : String(err);
+    req.reject(new Error(`読み取りに失敗しました: ${message}`));
   }
 
   return true;

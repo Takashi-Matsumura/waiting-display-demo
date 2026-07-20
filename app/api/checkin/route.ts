@@ -7,7 +7,8 @@ interface CheckinResultPayload {
   ticketNumber: string;
   name: string | null;
   slotLabel: string | null;
-  result: "ok" | "already" | "unknown" | "void";
+  slotStartTime: string | null;
+  result: "ok" | "already" | "unknown" | "void" | "not_issued" | "too_early";
 }
 
 function runCheckin(ticketNumber: string): CheckinResultPayload {
@@ -16,6 +17,7 @@ function runCheckin(ticketNumber: string): CheckinResultPayload {
     ticketNumber,
     name: ticket?.name ?? null,
     slotLabel: slot?.label ?? null,
+    slotStartTime: slot?.startTime ?? null,
     result,
   };
 }
@@ -35,13 +37,18 @@ export async function GET() {
         ticketNumber: event.raw || event.uid,
         name: null,
         slotLabel: null,
+        slotStartTime: null,
         result: "unknown",
       };
     }
     return runCheckin(event.payload.t);
   });
 
-  return Response.json({ connected: status.connected, results });
+  return Response.json({
+    connected: status.connected,
+    tagPresent: status.cardPresent,
+    results,
+  });
 }
 
 /** リーダー無し検証用・障害時のフォールバック用の手動チェックイン。 */

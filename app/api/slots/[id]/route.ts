@@ -13,7 +13,7 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { label, capacity, startTime } = body ?? {};
+  const { label, capacity, startTime, endTime } = body ?? {};
 
   if (capacity !== undefined && (!Number.isInteger(capacity) || capacity <= 0)) {
     return Response.json({ error: "capacity は正の整数で指定してください。" }, { status: 400 });
@@ -23,6 +23,7 @@ export async function PATCH(
     label: typeof label === "string" ? label : undefined,
     capacity: typeof capacity === "number" ? capacity : undefined,
     startTime: startTime !== undefined ? startTime : undefined,
+    endTime: endTime !== undefined ? endTime : undefined,
   });
   return Response.json({ slot });
 }

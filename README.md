@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# waiting-display-demo
 
-## Getting Started
+イベントブースでの整理券運営を支援する Web アプリです。紙の整理券の代わりに **NTAG**（NFCタグ）を配布し、NFCリーダー（PC/SC対応、例: Sony RC-S300）にかざすことで発行・受付・チェックイン状況の表示を行います。
 
-First, run the development server:
+## 主な機能
+
+- **時間枠マスタ管理** (`/slots`): 参加時間の枠（例: 14:00〜14:30）と定員を登録・編集します。
+- **発行 / 登録** (`/issue`): 整理番号・受付名・時間枠を入力し、NTAGにかざして NDEF（Text レコード）として書き込みます。NFCリーダーが無い場合の手動発行にも対応しています。
+- **受付 / チェックイン** (`/checkin`): 当日、NTAGをかざして NDEF を読み取り、整理番号を照合してチェックインします。二重チェックインや未登録タグも判定します。
+- **ディスプレイ** (`/display`): 会場モニタ向けに、時間枠ごとの発行数/定員の充足率とチェックイン状況をリアルタイム表示します。
+
+## 技術スタック
+
+- [Next.js 16](https://nextjs.org/)（App Router） / React 19 / TypeScript
+- Tailwind CSS v4
+- [SWR](https://swr.vercel.app/)（クライアント側のポーリング取得）
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)（整理券データの永続化）
+- [nfc-pcsc](https://github.com/pokusew/nfc-pcsc)（PC/SC対応 USB NFCリーダーとの通信）
+
+## セットアップ
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+[http://localhost:3000](http://localhost:3000) を開きます。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### NFCリーダーについて
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`nfc-pcsc` / `better-sqlite3` はネイティブアドオンです。USB接続の PC/SC 対応 NFCリーダー（例: Sony RC-S300, ACR122 など）を接続したローカルPC上での実行を想定しています。リーダーが接続されていない環境でも、各画面の「手動」入力機能を使えば動作を確認できます。
 
-## Learn More
+整理券データは `data/waiting.db`（SQLite, WALモード）に保存されます。このディレクトリは `.gitignore` 対象です。
 
-To learn more about Next.js, take a look at the following resources:
+## ライセンス
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+[MIT License](./LICENSE)

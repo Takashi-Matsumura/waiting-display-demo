@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "整理券運営システム",
+  title: "整理券管理アプリ",
   description: "イベントブースのNTAG整理券・受付・ディスプレイを管理する運営アプリ",
 };
 

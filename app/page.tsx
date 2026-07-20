@@ -7,19 +7,20 @@ const NAV_ITEMS = [
     description: "参加時間の枠と定員を登録・編集します。",
   },
   {
+    href: "/prepare",
+    title: "準備",
+    description: "イベント前にNTAGへ整理番号と時間枠を書き込みます。",
+  },
+  {
     href: "/issue",
-    title: "発行 / 登録",
-    description: "NTAGをかざして整理券情報を書き込みます。",
+    title: "発行",
+    description: "当日、タグをかざして受付名を書き込み発行します。",
   },
   {
     href: "/checkin",
-    title: "受付 / チェックイン",
-    description: "当日、NTAGをかざしてチェックインします。",
-  },
-  {
-    href: "/display",
-    title: "ディスプレイ",
-    description: "会場モニタ用に受付状況をリアルタイム表示します。",
+    title: "受付ディスプレイ",
+    description: "当日、NTAGでチェックインし、現在/次の受付状況と発行状況を表示します。",
+    newTab: true,
   },
 ];
 
@@ -27,7 +28,7 @@ export default function Home() {
   return (
     <div className="flex flex-1 flex-col items-center bg-zinc-50 px-6 py-16 dark:bg-black">
       <div className="w-full max-w-3xl">
-        <h1 className="text-3xl font-bold tracking-tight">整理券運営システム</h1>
+        <h1 className="text-3xl font-bold tracking-tight">整理券管理アプリ</h1>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
           イベントブースでのNTAG整理券の発行・受付・表示を行います。
         </p>
@@ -36,6 +37,8 @@ export default function Home() {
             <Link
               key={item.href}
               href={item.href}
+              target={item.newTab ? "_blank" : undefined}
+              rel={item.newTab ? "noopener noreferrer" : undefined}
               className="rounded-xl border border-black/10 bg-white p-6 transition-colors hover:border-black/20 dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20"
             >
               <div className="flex items-center gap-3">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import useSWR from "swr";
 import { jsonFetcher } from "@/lib/fetcher";
 
@@ -40,7 +41,12 @@ export default function DisplayBoard() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-8 py-10">
       <header className="flex items-center justify-between">
-        <h1 className="text-4xl font-black tracking-tight">受付状況</h1>
+        <div>
+          <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200">
+            ← ホームに戻る
+          </Link>
+          <h1 className="mt-2 text-4xl font-black tracking-tight">受付状況</h1>
+        </div>
         {updatedAt && (
           <span className="text-sm text-zinc-400">
             最終更新 {updatedAt.toLocaleTimeString("ja-JP")}

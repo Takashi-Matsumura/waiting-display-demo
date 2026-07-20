@@ -153,69 +153,96 @@ export default function SlotManager() {
         {!isLoading && slots.length === 0 && (
           <p className="text-sm text-zinc-500">まだ時間枠がありません。上のフォームから追加してください。</p>
         )}
-        <ul className="flex flex-col gap-3">
-          {slots.map((slot) => (
-            <li
-              key={slot.id}
-              className="flex flex-col gap-2 rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between"
-            >
-              {editingId === slot.id ? (
-                <div className="flex flex-1 flex-wrap items-center gap-2">
-                  <input
-                    className="rounded-md border border-black/15 px-2 py-1 text-sm dark:border-white/15 dark:bg-black"
-                    value={editLabel}
-                    onChange={(e) => setEditLabel(e.target.value)}
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    className="w-20 rounded-md border border-black/15 px-2 py-1 text-sm dark:border-white/15 dark:bg-black"
-                    value={editCapacity}
-                    onChange={(e) => setEditCapacity(e.target.value)}
-                  />
-                  <button
-                    onClick={() => saveEdit(slot.id)}
-                    className="rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background"
-                  >
-                    保存
-                  </button>
-                  <button
-                    onClick={() => setEditingId(null)}
-                    className="rounded-full border border-black/15 px-3 py-1 text-xs dark:border-white/15"
-                  >
-                    キャンセル
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <p className="font-medium">
-                    {slot.label}{" "}
-                    <span className="text-xs font-normal text-zinc-500">key: {slot.key}</span>
-                  </p>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    発行 {slot.issued} / 定員 {slot.capacity}（チェックイン {slot.checkedIn} ・ 残 {slot.remaining}）
-                  </p>
-                </div>
-              )}
-              {editingId !== slot.id && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => startEdit(slot)}
-                    className="rounded-full border border-black/15 px-3 py-1 text-xs dark:border-white/15"
-                  >
-                    編集
-                  </button>
-                  <button
-                    onClick={() => handleDelete(slot.id)}
-                    className="rounded-full border border-red-300 px-3 py-1 text-xs text-red-600 dark:border-red-900 dark:text-red-400"
-                  >
-                    削除
-                  </button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+        {slots.length > 0 && (
+          <div className="overflow-x-auto rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-zinc-900">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-black/10 text-xs text-zinc-500 dark:border-white/10">
+                  <th className="px-4 py-3 font-medium">表示名</th>
+                  <th className="px-4 py-3 font-medium">キー</th>
+                  <th className="px-4 py-3 font-medium">発行 / 定員</th>
+                  <th className="px-4 py-3 font-medium">チェックイン</th>
+                  <th className="px-4 py-3 font-medium">残</th>
+                  <th className="px-4 py-3 font-medium">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {slots.map((slot) => (
+                  <tr key={slot.id} className="border-b border-black/5 last:border-0 dark:border-white/5">
+                    {editingId === slot.id ? (
+                      <>
+                        <td className="px-4 py-2">
+                          <input
+                            className="w-full rounded-md border border-black/15 px-2 py-1 text-sm dark:border-white/15 dark:bg-black"
+                            value={editLabel}
+                            onChange={(e) => setEditLabel(e.target.value)}
+                          />
+                        </td>
+                        <td className="px-4 py-2 text-zinc-500">{slot.key}</td>
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-1">
+                            {slot.issued} /{" "}
+                            <input
+                              type="number"
+                              min={1}
+                              className="w-16 rounded-md border border-black/15 px-2 py-1 text-sm dark:border-white/15 dark:bg-black"
+                              value={editCapacity}
+                              onChange={(e) => setEditCapacity(e.target.value)}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">{slot.checkedIn}</td>
+                        <td className="px-4 py-2">{slot.remaining}</td>
+                        <td className="px-4 py-2">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => saveEdit(slot.id)}
+                              className="rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background"
+                            >
+                              保存
+                            </button>
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="rounded-full border border-black/15 px-3 py-1 text-xs dark:border-white/15"
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-4 py-2 font-medium">{slot.label}</td>
+                        <td className="px-4 py-2 text-zinc-500">{slot.key}</td>
+                        <td className="px-4 py-2">
+                          {slot.issued} / {slot.capacity}
+                        </td>
+                        <td className="px-4 py-2">{slot.checkedIn}</td>
+                        <td className="px-4 py-2">{slot.remaining}</td>
+                        <td className="px-4 py-2">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => startEdit(slot)}
+                              className="rounded-full border border-black/15 px-3 py-1 text-xs dark:border-white/15"
+                            >
+                              編集
+                            </button>
+                            <button
+                              onClick={() => handleDelete(slot.id)}
+                              className="rounded-full border border-red-300 px-3 py-1 text-xs text-red-600 dark:border-red-900 dark:text-red-400"
+                            >
+                              削除
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -32,14 +32,19 @@ export default function Home() {
           イベントブースでのNTAG整理券の発行・受付・表示を行います。
         </p>
         <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.map((item, index) => (
             <Link
               key={item.href}
               href={item.href}
               className="rounded-xl border border-black/10 bg-white p-6 transition-colors hover:border-black/20 dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20"
             >
-              <h2 className="text-lg font-semibold">{item.title}</h2>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-bold text-background">
+                  {index + 1}
+                </span>
+                <h2 className="text-lg font-semibold">{item.title}</h2>
+              </div>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
                 {item.description}
               </p>
             </Link>

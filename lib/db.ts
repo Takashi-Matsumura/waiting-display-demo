@@ -377,6 +377,26 @@ export function listTickets(): TicketRow[] {
   return rows.map(toTicket);
 }
 
+/** 指定した時間枠に属する整理券を整理番号順に返す。紛失タグの再発行UIの一覧表示に使う。 */
+export function listTicketsBySlot(slotId: number): TicketRow[] {
+  const rows = getDb()
+    .prepare(`SELECT * FROM tickets WHERE slot_id = ? ORDER BY ticket_number ASC`)
+    .all(slotId) as TicketSql[];
+  return rows.map(toTicket);
+}
+
+/**
+ * 再発行: 紛失した物理タグの代替として新タグに書き込んだ後、そのUIDだけを記録する。
+ * name/status/定員には一切触れない(新規発行ではなく同一レコードのタグ差し替えのため)。
+ * completeTicketName とは意図的に分離する(あちらは「発行」ステップの受付名確定用)。
+ */
+export function updateTicketUid(ticketNumber: string, uid: string): TicketRow | undefined {
+  const ticket = getTicketByNumber(ticketNumber);
+  if (!ticket) return undefined;
+  getDb().prepare(`UPDATE tickets SET uid = ? WHERE id = ?`).run(uid, ticket.id);
+  return getTicket(ticket.id);
+}
+
 /** 発行済み(void以外)件数。定員チェックに使用。 */
 export function countIssuedForSlot(slotId: number): number {
   const row = getDb()

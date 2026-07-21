@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useRef, useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { jsonFetcher } from "@/lib/fetcher";
 import { encodeTicketPayload } from "@/lib/payload";
 
@@ -15,6 +15,12 @@ interface SlotStat {
   issued: number;
   checkedIn: number;
   remaining: number;
+}
+
+interface TicketDetail {
+  ticketNumber: string;
+  name: string | null;
+  status: "issued" | "checked_in" | "void";
 }
 
 interface NfcStatus {
@@ -72,7 +78,14 @@ export default function EventSetupPanel() {
   const [manualMode, setManualMode] = useState(false);
   const abortRef = useRef(false);
 
-  const isBusy = activeSlotId !== null;
+  // ---- 紛失タグの再発行 ----
+  // activeReissueNumber が非nullの間、その整理番号がNFCタグの書込待ち状態。
+  // 「準備」と同じNFCリーダーを共有するため、isBusy に合流させて相互排他にする。
+  const [activeReissueNumber, setActiveReissueNumber] = useState<string | null>(null);
+  const [expandedSlotId, setExpandedSlotId] = useState<number | null>(null);
+  const { mutate: globalMutate } = useSWRConfig();
+
+  const isBusy = activeSlotId !== null || activeReissueNumber !== null;
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -192,6 +205,52 @@ export default function EventSetupPanel() {
     setResultMessage({ slotId, text: "準備をキャンセルしました。", kind: "info" });
   }
 
+  async function handleReissue(slotId: number, ticketNumber: string) {
+    if (isBusy || editingId !== null) return;
+
+    abortRef.current = false;
+    setActiveReissueNumber(ticketNumber);
+    setResultMessage(null);
+    try {
+      const res = await fetch("/api/prepare/reissue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticketNumber, manual: manualMode }),
+      });
+      const resData = await res.json();
+      if (abortRef.current) return;
+      if (!res.ok || !resData.success) {
+        setResultMessage({
+          slotId,
+          text: resData.error ?? "再発行に失敗しました。",
+          kind: "error",
+        });
+        setActiveReissueNumber(null);
+        return;
+      }
+      setResultMessage({
+        slotId,
+        text: `再発行しました: ${resData.ticket.ticketNumber}${resData.uid ? ` (UID: ${resData.uid})` : ""}`,
+        kind: "ok",
+      });
+      setActiveReissueNumber(null);
+      await mutate(); // /api/slots (件数は変わらないが念のため)
+      await globalMutate(`/api/slots/${slotId}/tickets`);
+    } catch {
+      if (!abortRef.current) {
+        setResultMessage({ slotId, text: "通信エラーが発生しました。", kind: "error" });
+        setActiveReissueNumber(null);
+      }
+    }
+  }
+
+  async function handleCancelReissue(slotId: number) {
+    abortRef.current = true;
+    await fetch("/api/prepare", { method: "DELETE" }); // 汎用キャンセル(何がアームしたかは問わない)
+    setActiveReissueNumber(null);
+    setResultMessage({ slotId, text: "再発行をキャンセルしました。", kind: "info" });
+  }
+
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
       {/* 左: 時間枠 / トークン準備 */}
@@ -222,6 +281,7 @@ export default function EventSetupPanel() {
                   {slots.map((slot) => {
                     const isEditing = editingId === slot.id;
                     const isArming = activeSlotId === slot.id;
+                    const isExpanded = expandedSlotId === slot.id;
                     const suggested =
                       slot.remaining > 0
                         ? `${slot.key}-${String(slot.capacity - slot.remaining + 1).padStart(2, "0")}`
@@ -346,6 +406,18 @@ export default function EventSetupPanel() {
                                     >
                                       削除
                                     </button>
+                                    {slot.issued > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setExpandedSlotId(isExpanded ? null : slot.id)
+                                        }
+                                        disabled={isBusy}
+                                        className="rounded-full border border-black/15 px-3 py-1 text-xs disabled:opacity-40 dark:border-white/15"
+                                      >
+                                        {isExpanded ? "▾" : "▸"} 整理券 {slot.issued}
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </td>
@@ -365,6 +437,20 @@ export default function EventSetupPanel() {
                               }`}
                             >
                               {rowMessage.text}
+                            </td>
+                          </tr>
+                        )}
+                        {isExpanded && (
+                          <tr className="border-b border-black/5 last:border-0 dark:border-white/5">
+                            <td colSpan={7} className="bg-black/[0.02] px-4 py-3 dark:bg-white/[0.02]">
+                              <SlotTicketList
+                                slotId={slot.id}
+                                slotKey={slot.key}
+                                activeReissueNumber={activeReissueNumber}
+                                isBusy={isBusy}
+                                onReissue={handleReissue}
+                                onCancelReissue={handleCancelReissue}
+                              />
                             </td>
                           </tr>
                         )}
@@ -480,6 +566,95 @@ export default function EventSetupPanel() {
 
         <AnnouncementEditor />
       </div>
+    </div>
+  );
+}
+
+/**
+ * 枠の展開行に表示する、発行済み整理券の一覧。紛失した物理タグの再発行に使う。
+ * 整理番号・受付名はそのまま新タグへ引き継がれ、定員(残数)は消費しない。
+ */
+function SlotTicketList({
+  slotId,
+  slotKey,
+  activeReissueNumber,
+  isBusy,
+  onReissue,
+  onCancelReissue,
+}: {
+  slotId: number;
+  slotKey: string;
+  activeReissueNumber: string | null;
+  isBusy: boolean;
+  onReissue: (slotId: number, ticketNumber: string) => void;
+  onCancelReissue: (slotId: number) => void;
+}) {
+  const { data, isLoading } = useSWR<{ tickets: TicketDetail[] }>(
+    `/api/slots/${slotId}/tickets`,
+    jsonFetcher
+  );
+  const tickets = data?.tickets ?? [];
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[11px] text-zinc-500">
+        紛失した整理券の物理タグを再発行します。整理番号・受付名はそのまま引き継がれ、定員（残数）は消費しません。
+      </p>
+      {isLoading && <p className="text-xs text-zinc-500">読み込み中…</p>}
+      {!isLoading && tickets.length === 0 && (
+        <p className="text-xs text-zinc-500">発行済みの整理券がありません。</p>
+      )}
+      {tickets.map((t) => {
+        const isArming = activeReissueNumber === t.ticketNumber;
+        const named = t.name != null && t.name !== "";
+        const statusLabel =
+          t.status === "checked_in"
+            ? "チェックイン済み"
+            : t.status === "void"
+              ? "無効"
+              : named
+                ? "発行済み"
+                : "未発行";
+
+        return (
+          <div
+            key={t.ticketNumber}
+            className="flex items-center justify-between gap-3 rounded-md border border-black/10 px-3 py-2 text-sm dark:border-white/10"
+          >
+            <div className="flex items-center gap-3">
+              <span className="font-medium">{t.ticketNumber}</span>
+              <span className={named ? "" : "text-zinc-400"}>{named ? t.name : "未発行"}</span>
+              <span className="text-xs text-zinc-500">{statusLabel}</span>
+            </div>
+            {isArming ? (
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium">タグをかざしてください…</span>
+                  <button
+                    type="button"
+                    onClick={() => onCancelReissue(slotId)}
+                    className="rounded-full border border-black/15 px-3 py-1 text-xs dark:border-white/15"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+                <p className="break-all text-[10px] text-zinc-500">
+                  {encodeTicketPayload({ t: t.ticketNumber, n: t.name ?? "", s: slotKey })}
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onReissue(slotId, t.ticketNumber)}
+                disabled={isBusy || t.status === "void"}
+                className="rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-40"
+              >
+                再発行
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

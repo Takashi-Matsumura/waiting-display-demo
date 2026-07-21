@@ -41,6 +41,7 @@ function getDb() {
       status TEXT NOT NULL DEFAULT 'issued',
       issued_at INTEGER NOT NULL,
       checked_in_at INTEGER,
+      reissued_at INTEGER,
       created_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_tickets_slot ON tickets(slot_id);
@@ -54,6 +55,7 @@ function getDb() {
 
   migrateTicketsNameNullable(db);
   migrateSlotsAddEndTime(db);
+  migrateTicketsAddReissuedAt(db);
 
   return db;
 }
@@ -111,6 +113,19 @@ function migrateSlotsAddEndTime(database: any): void {
   console.log("[db] Migration complete.");
 }
 
+/**
+ * tickets.reissued_at(紛失タグの再発行日時)列を追加する。新規のnullable列追加なので
+ * ALTER TABLE ADD COLUMNで足りる。既に列が存在する場合(新規DB含む)は何もしない(冪等)。
+ */
+function migrateTicketsAddReissuedAt(database: any): void {
+  const columns = database.prepare(`PRAGMA table_info(tickets)`).all() as Array<{ name: string }>;
+  if (columns.some((c) => c.name === "reissued_at")) return;
+
+  console.log("[db] Adding tickets.reissued_at column...");
+  database.exec(`ALTER TABLE tickets ADD COLUMN reissued_at INTEGER`);
+  console.log("[db] Migration complete.");
+}
+
 export interface SlotRow {
   id: number;
   key: string;
@@ -131,6 +146,7 @@ export interface TicketRow {
   status: "issued" | "checked_in" | "void";
   issuedAt: number;
   checkedInAt: number | null;
+  reissuedAt: number | null;
   createdAt: number;
 }
 
@@ -154,6 +170,7 @@ interface TicketSql {
   status: "issued" | "checked_in" | "void";
   issued_at: number;
   checked_in_at: number | null;
+  reissued_at: number | null;
   created_at: number;
 }
 
@@ -180,6 +197,7 @@ function toTicket(row: TicketSql): TicketRow {
     status: row.status,
     issuedAt: row.issued_at,
     checkedInAt: row.checked_in_at,
+    reissuedAt: row.reissued_at,
     createdAt: row.created_at,
   };
 }
@@ -386,14 +404,25 @@ export function listTicketsBySlot(slotId: number): TicketRow[] {
 }
 
 /**
- * 再発行: 紛失した物理タグの代替として新タグに書き込んだ後、そのUIDだけを記録する。
+ * 再発行: 紛失した物理タグの代替として新タグに書き込んだことを記録する。
  * name/status/定員には一切触れない(新規発行ではなく同一レコードのタグ差し替えのため)。
  * completeTicketName とは意図的に分離する(あちらは「発行」ステップの受付名確定用)。
+ * uid はNFC実書込があった場合のみ渡される(手動再発行時は新タグが無いため省略される)。
  */
-export function updateTicketUid(ticketNumber: string, uid: string): TicketRow | undefined {
+export function markTicketReissued(
+  ticketNumber: string,
+  uid?: string | null
+): TicketRow | undefined {
   const ticket = getTicketByNumber(ticketNumber);
   if (!ticket) return undefined;
-  getDb().prepare(`UPDATE tickets SET uid = ? WHERE id = ?`).run(uid, ticket.id);
+  const now = Date.now();
+  if (uid !== undefined && uid !== null) {
+    getDb()
+      .prepare(`UPDATE tickets SET uid = ?, reissued_at = ? WHERE id = ?`)
+      .run(uid, now, ticket.id);
+  } else {
+    getDb().prepare(`UPDATE tickets SET reissued_at = ? WHERE id = ?`).run(now, ticket.id);
+  }
   return getTicket(ticket.id);
 }
 

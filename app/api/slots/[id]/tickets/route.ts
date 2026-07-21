@@ -17,6 +17,7 @@ export async function GET(
     ticketNumber: t.ticketNumber,
     name: t.name,
     status: t.status,
+    reissuedAt: t.reissuedAt,
   }));
   return Response.json({ tickets });
 }

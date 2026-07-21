@@ -1,4 +1,4 @@
-import { getSlot, getTicketByNumber, updateTicketUid } from "@/lib/db";
+import { getSlot, getTicketByNumber, markTicketReissued } from "@/lib/db";
 import { issueNextCard } from "@/lib/nfc";
 
 export const dynamic = "force-dynamic";
@@ -37,14 +37,15 @@ export async function POST(request: Request) {
 
   const name = ticket.name ?? ""; // 既存の受付名をそのまま新タグへ引き継ぐ(未発行なら空文字)
 
-  // リーダー無しでの検証・運用向けの手動再発行(NFC書込を行わない、レコードも変更しない)。
+  // リーダー無しでの検証・運用向けの手動再発行(NFC書込は行わないが、再発行した記録は残す)。
   if (manual === true) {
-    return Response.json({ success: true, uid: null, ticket });
+    const updated = markTicketReissued(ticket.ticketNumber);
+    return Response.json({ success: true, uid: null, ticket: updated ?? ticket });
   }
 
   try {
     const { uid } = await issueNextCard({ t: ticket.ticketNumber, n: name, s: slot.key });
-    const updated = updateTicketUid(ticket.ticketNumber, uid);
+    const updated = markTicketReissued(ticket.ticketNumber, uid);
     return Response.json({ success: true, uid, ticket: updated ?? ticket });
   } catch (err) {
     const message = err instanceof Error ? err.message : "再発行に失敗しました。";

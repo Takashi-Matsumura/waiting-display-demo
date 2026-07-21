@@ -21,6 +21,7 @@ interface TicketDetail {
   ticketNumber: string;
   name: string | null;
   status: "issued" | "checked_in" | "void";
+  reissuedAt: number | null;
 }
 
 interface NfcStatus {
@@ -625,6 +626,14 @@ function SlotTicketList({
               <span className="font-medium">{t.ticketNumber}</span>
               <span className={named ? "" : "text-zinc-400"}>{named ? t.name : "未発行"}</span>
               <span className="text-xs text-zinc-500">{statusLabel}</span>
+              {t.reissuedAt !== null && (
+                <span
+                  className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                  title={`再発行日時: ${new Date(t.reissuedAt).toLocaleString("ja-JP")}`}
+                >
+                  再発行済み
+                </span>
+              )}
             </div>
             {isArming ? (
               <div className="flex flex-col items-end gap-1">

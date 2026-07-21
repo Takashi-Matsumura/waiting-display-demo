@@ -7,11 +7,16 @@
 export const TNF_EMPTY = 0x00;
 export const TNF_WELL_KNOWN = 0x01;
 
-/** 未解釈(raw)のNDEFレコード。type/payloadの意味はTNF/type値に応じて呼び出し側が解釈する。 */
+/**
+ * 未解釈(raw)のNDEFレコード。type/payloadの意味はTNF/type値に応じて呼び出し側が解釈する。
+ * id はIL(ID Length)フラグが立っているレコードにのみ存在する(無ければ undefined)。
+ * 他アプリが書いたレコードをID込みでバイト単位そのまま保持し直せるよう、存在有無を区別する。
+ */
 export interface RawNdefRecord {
   tnf: number;
   type: Buffer;
   payload: Buffer;
+  id?: Buffer;
 }
 
 const NDEF_MESSAGE_TLV = 0x03;
@@ -21,22 +26,33 @@ const NULL_TLV = 0x00;
 const FLAG_MB = 0x80;
 const FLAG_ME = 0x40;
 const FLAG_SR = 0x10;
+const FLAG_IL = 0x08;
 
 /**
  * 1レコード分のバイト列を組み立てる(短レコードのみ)。
  * MB/MEフラグはここでは立てない。複数レコードをまとめる encodeNdefMessage が設定する。
  */
 export function encodeNdefRecord(record: RawNdefRecord): Buffer {
-  const { tnf, type, payload } = record;
+  const { tnf, type, payload, id } = record;
   if (payload.length > 0xff) {
     throw new Error("NDEFレコードのペイロードが大きすぎます(拡張長は非対応)。");
   }
   if (type.length > 0xff) {
     throw new Error("NDEFレコードのtypeが大きすぎます。");
   }
+  if (id !== undefined && id.length > 0xff) {
+    throw new Error("NDEFレコードのidが大きすぎます。");
+  }
 
-  const header = FLAG_SR | (tnf & 0x07);
-  return Buffer.concat([Buffer.from([header, type.length, payload.length]), type, payload]);
+  const header = FLAG_SR | (id !== undefined ? FLAG_IL : 0) | (tnf & 0x07);
+  const headerBytes =
+    id !== undefined
+      ? Buffer.from([header, type.length, payload.length, id.length])
+      : Buffer.from([header, type.length, payload.length]);
+
+  return Buffer.concat(
+    id !== undefined ? [headerBytes, type, id, payload] : [headerBytes, type, payload]
+  );
 }
 
 /** 複数レコードを1つのNDEFメッセージ(TLVラップ込み、0x03...0xFE)にまとめる。 */
@@ -104,19 +120,25 @@ export function decodeNdefMessage(buf: Buffer): RawNdefRecord[] {
     const isShortRecord = (flags & FLAG_SR) !== 0;
     if (!isShortRecord) break; // 拡張長レコードは非対応
 
+    const hasId = (flags & FLAG_IL) !== 0;
     const typeLength = message[offset + 1];
     const payloadLength = message[offset + 2];
-    if (typeLength === undefined || payloadLength === undefined) break;
+    const idLength = hasId ? message[offset + 3] : 0;
+    if (typeLength === undefined || payloadLength === undefined || (hasId && idLength === undefined)) {
+      break;
+    }
 
-    const typeStart = offset + 3;
-    const payloadStart = typeStart + typeLength;
+    const typeStart = offset + (hasId ? 4 : 3);
+    const idStart = typeStart + typeLength;
+    const payloadStart = idStart + idLength;
     const payloadEnd = payloadStart + payloadLength;
     if (payloadEnd > message.length) break;
 
     records.push({
       tnf: flags & 0x07,
-      type: Buffer.from(message.subarray(typeStart, payloadStart)),
+      type: Buffer.from(message.subarray(typeStart, idStart)),
       payload: Buffer.from(message.subarray(payloadStart, payloadEnd)),
+      ...(hasId ? { id: Buffer.from(message.subarray(idStart, payloadStart)) } : {}),
     });
 
     if ((flags & FLAG_ME) !== 0) break;

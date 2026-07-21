@@ -2,18 +2,13 @@ import Link from "next/link";
 
 const NAV_ITEMS = [
   {
-    href: "/slots",
-    title: "時間枠マスタ管理",
-    description: "参加時間の枠と定員を登録・編集します。",
-  },
-  {
-    href: "/prepare",
-    title: "準備",
-    description: "イベント前にNTAGへ整理番号と時間枠を書き込みます。",
+    href: "/setup",
+    title: "イベント準備",
+    description: "時間枠の登録と、NTAGへの整理番号書き込み（準備）をまとめて行います。",
   },
   {
     href: "/issue",
-    title: "発行",
+    title: "トークン発行",
     description: "当日、タグをかざして受付名を書き込み発行します。",
   },
   {
@@ -39,7 +34,9 @@ export default function Home() {
               href={item.href}
               target={item.newTab ? "_blank" : undefined}
               rel={item.newTab ? "noopener noreferrer" : undefined}
-              className="rounded-xl border border-black/10 bg-white p-6 transition-colors hover:border-black/20 dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20"
+              className={`rounded-xl border border-black/10 bg-white p-6 transition-colors hover:border-black/20 dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20 ${
+                index === 0 ? "sm:col-span-2" : ""
+              }`}
             >
               <div className="flex items-center gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-bold text-background">

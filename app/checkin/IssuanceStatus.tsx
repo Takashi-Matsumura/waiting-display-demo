@@ -19,7 +19,7 @@ interface Totals {
 
 /**
  * 全体の整理券発行状況(合計＋全枠一覧)を表示する。全券が発行され残数が無くなった
- * 場合は、/slots で設定された案内コメント(announcement)をここに表示する。
+ * 場合は、/setup で設定された案内コメント(announcement)をここに表示する。
  */
 export default function IssuanceStatus({
   slots,

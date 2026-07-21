@@ -250,6 +250,10 @@ export function cancelIdentify(): void {
 const PAGE_SIZE = 4;
 const USER_MEMORY_START_PAGE = 4; // NTAG のユーザーデータは page 4 から
 const INITIAL_READ_BYTES = 64; // NTAG213(144B)のうち先頭64Bをまず読む。TLV長が超える場合のみ追加読取。
+// nfc-pcsc の reader.read() は既定でこの単位(16B)のREAD BINARY APDUに分割して送信する。
+// 読取バイト数がこの倍数でないと最終チャンクが16B未満になり、リーダーによっては
+// Le長不一致(Status code: 0x6c10)で拒否される(SONY PaSoRi等で確認)。
+const READ_PACKET_SIZE = 16;
 
 // NTAG機種ごとのユーザーメモリ容量(バイト)。機種は現状 NTAG213 決め打ち。
 const NTAG_CAPACITY_BYTES = {
@@ -290,8 +294,8 @@ async function readNdefRecords(reader: any): Promise<RawNdefRecord[]> {
   if (located !== null) {
     const neededBytes = located.offset + 2 + located.length;
     if (neededBytes > buf.length) {
-      const extraPages = Math.ceil(neededBytes / PAGE_SIZE);
-      buf = await reader.read(USER_MEMORY_START_PAGE, extraPages * PAGE_SIZE, PAGE_SIZE);
+      const alignedLength = Math.ceil(neededBytes / READ_PACKET_SIZE) * READ_PACKET_SIZE;
+      buf = await reader.read(USER_MEMORY_START_PAGE, alignedLength, PAGE_SIZE);
     }
   }
 
@@ -333,7 +337,18 @@ async function handlePendingIssue(reader: any, card: any): Promise<boolean> {
 
     // read: 既存のNDEFメッセージを読み取り、自分のTextレコード以外(他アプリが書いた
     // レコード等)を保持したまま、Textレコードだけを置き換える/無ければ追加する。
-    const existingRecords = await readNdefRecords(reader);
+    // 読取自体に失敗した場合(壊れたタグ・想定外のデータ等)は、既存データ保持を諦めて
+    // 白紙のタグとして扱い、自分のTextレコードのみを書き込む(オペレーターが手詰まりに
+    // ならないよう、読取失敗を理由に書込全体を止めない)。
+    let existingRecords: RawNdefRecord[] = [];
+    try {
+      existingRecords = await readNdefRecords(reader);
+    } catch (err) {
+      console.warn(
+        `[NFC] Failed to read existing NDEF before write, treating tag as blank: UID=${card.uid}`,
+        err
+      );
+    }
     const textIndex = existingRecords.findIndex(isTextRecord);
     const records = [...existingRecords];
     if (textIndex >= 0) {

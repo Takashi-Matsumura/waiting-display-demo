@@ -3,6 +3,13 @@
 // (参考: ted-stem-cards/lib/nfc.ts のシングルトン管理・キュー・重複除去パターンを踏襲)
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
 import { decodeTicketPayload, encodeTicketPayload, TicketPayload } from "./payload";
+import {
+  decodeNdefMessage,
+  encodeNdefMessage,
+  locateNdefMessageTlv,
+  RawNdefRecord,
+  TNF_WELL_KNOWN,
+} from "./ndef";
 
 let NFC: any;
 try {
@@ -73,7 +80,7 @@ function ensureNfc() {
       lastSeenUid = card.uid;
 
       try {
-        const raw = await readNdef(reader);
+        const raw = await readNdefText(reader);
         const payload = raw ? decodeTicketPayload(raw) : null;
         if (!payload) {
           console.log(`[NFC] Unrecognized tag UID=${card.uid} (no valid ticket payload)`);
@@ -237,133 +244,65 @@ export function cancelIdentify(): void {
   }
 }
 
-// ---- NDEF Text レコードの組立/解析 ----
+// ---- NDEF Text レコードの組立/解析 (TicketPayloadのtype='T'ラッピングのみ担当。
+//      複数レコードのTLV/メッセージ組立・解析は lib/ndef.ts に切り出し済み) ----
 
 const PAGE_SIZE = 4;
 const USER_MEMORY_START_PAGE = 4; // NTAG のユーザーデータは page 4 から
 const INITIAL_READ_BYTES = 64; // NTAG213(144B)のうち先頭64Bをまず読む。TLV長が超える場合のみ追加読取。
 
-/**
- * NDEF Text レコードを TLV でラップした Buffer を組み立てる。
- * (参考 buildNdefUrlMessage の URIレコード版をTextレコード用に踏襲)
- */
-function buildNdefTextMessage(text: string, lang = "en"): Buffer {
+// NTAG機種ごとのユーザーメモリ容量(バイト)。機種は現状 NTAG213 決め打ち。
+const NTAG_CAPACITY_BYTES = {
+  NTAG213: 144,
+  NTAG215: 504,
+  NTAG216: 888,
+} as const;
+const TAG_USER_MEMORY_CAPACITY = NTAG_CAPACITY_BYTES.NTAG213;
+
+const TEXT_RECORD_TYPE = Buffer.from("T", "ascii"); // type='T' (0x54)
+
+/** TicketPayloadのテキストをNDEF Textレコードのpayload(status byte + lang + text)にエンコードする。 */
+function encodeTextRecordPayload(text: string, lang = "en"): Buffer {
   const langBytes = Buffer.from(lang, "ascii");
   const textBytes = Buffer.from(text, "utf8");
   const statusByte = langBytes.length & 0x3f; // bit7=0(UTF-8), bits0-5=言語コード長
-  const payload = Buffer.concat([Buffer.from([statusByte]), langBytes, textBytes]);
-  const payloadLength = payload.length;
-
-  if (payloadLength > 0xff) {
-    throw new Error("整理券データが大きすぎてNTAGに書き込めません。");
-  }
-
-  // NDEF record: MB|ME|SR|TNF=well-known(1) = 0xD1, type='T'(0x54)
-  const record = Buffer.concat([
-    Buffer.from([0xd1, 0x01, payloadLength, 0x54]),
-    payload,
-  ]);
-
-  // TLV wrapper: 0x03(NDEF Message TLV), length, record, 0xFE(terminator)
-  return Buffer.concat([Buffer.from([0x03, record.length]), record, Buffer.from([0xfe])]);
+  return Buffer.concat([Buffer.from([statusByte]), langBytes, textBytes]);
 }
 
-/**
- * page4以降の生バイト列から、最初のNDEF Textレコードの本文文字列を取り出す。
- * TLV(0x00=NULLでスキップ、0x03=NDEF Message、0xFE=終端)を走査する。
- * 対応するのは短レコード(SR)・単純TLV長(1バイト、0xFF拡張長は非対応)のみ。
- */
-function parseNdefText(buf: Buffer): string | null {
-  let offset = 0;
-  while (offset < buf.length) {
-    const tlvType = buf[offset];
-
-    if (tlvType === 0x00) {
-      offset += 1; // NULL TLV: 値なし
-      continue;
-    }
-    if (tlvType === 0xfe) {
-      break; // Terminator TLV
-    }
-    if (tlvType !== 0x03) {
-      // 未対応のTLV。長さバイトを信じて読み飛ばす。
-      const len = buf[offset + 1];
-      if (len === undefined) break;
-      offset += 2 + len;
-      continue;
-    }
-
-    const len = buf[offset + 1];
-    if (len === undefined || len === 0xff) return null; // 拡張長は非対応
-    const messageStart = offset + 2;
-    const message = buf.subarray(messageStart, messageStart + len);
-    if (message.length < len) return null; // 読取範囲不足(呼び出し側で追加読取)
-
-    return parseNdefRecordText(message);
-  }
-  return null;
-}
-
-/** NDEFメッセージ(単一レコード想定)からTextレコードの本文文字列を取り出す。 */
-function parseNdefRecordText(message: Buffer): string | null {
-  if (message.length < 4) return null;
-
-  const flags = message[0];
-  const tnf = flags & 0x07;
-  const isShortRecord = (flags & 0x10) !== 0;
-  if (tnf !== 0x01 || !isShortRecord) return null; // well-known + short record のみ対応
-
-  const typeLength = message[1];
-  const payloadLength = message[2];
-  const type = message.subarray(3, 3 + typeLength);
-  if (type.length !== 1 || type[0] !== 0x54) return null; // type='T'
-
-  const payloadStart = 3 + typeLength;
-  const payload = message.subarray(payloadStart, payloadStart + payloadLength);
-  if (payload.length < payloadLength) return null;
-
-  const statusByte = payload[0];
+/** NDEF Textレコードのpayloadから本文文字列を取り出す。 */
+function decodeTextRecordPayload(payload: Buffer): string {
+  const statusByte = payload[0] ?? 0;
   const langLength = statusByte & 0x3f;
-  const textBytes = payload.subarray(1 + langLength);
-  return textBytes.toString("utf8");
+  return payload.subarray(1 + langLength).toString("utf8");
 }
 
-/** カードの page4 以降を読み、NDEF Textレコードの本文を返す(無ければ null)。 */
-async function readNdef(reader: any): Promise<string | null> {
+/** レコードがwell-known type='T'(Textレコード)かどうか判定する。 */
+function isTextRecord(record: RawNdefRecord): boolean {
+  return record.tnf === TNF_WELL_KNOWN && record.type.length === 1 && record.type[0] === 0x54;
+}
+
+/** カードの page4 以降を読み、NDEFメッセージ内の全レコードを返す(未解釈のraw形式)。 */
+async function readNdefRecords(reader: any): Promise<RawNdefRecord[]> {
   let buf: Buffer = await reader.read(USER_MEMORY_START_PAGE, INITIAL_READ_BYTES, PAGE_SIZE);
 
   // 初回読取に収まっていればここで解決。TLV長が読取範囲を超える場合のみ追加読取する。
-  const declaredLength = declaredNdefMessageLength(buf);
-  if (declaredLength !== null) {
-    const neededBytes = declaredLength.offset + 2 + declaredLength.length;
+  const located = locateNdefMessageTlv(buf);
+  if (located !== null) {
+    const neededBytes = located.offset + 2 + located.length;
     if (neededBytes > buf.length) {
       const extraPages = Math.ceil(neededBytes / PAGE_SIZE);
       buf = await reader.read(USER_MEMORY_START_PAGE, extraPages * PAGE_SIZE, PAGE_SIZE);
     }
   }
 
-  return parseNdefText(buf);
+  return decodeNdefMessage(buf);
 }
 
-/** バッファ中のNDEF Message TLVの開始位置と宣言長を調べる(見つからなければnull)。 */
-function declaredNdefMessageLength(buf: Buffer): { offset: number; length: number } | null {
-  let offset = 0;
-  while (offset < buf.length) {
-    const tlvType = buf[offset];
-    if (tlvType === 0x00) {
-      offset += 1;
-      continue;
-    }
-    if (tlvType === 0xfe) break;
-    const len = buf[offset + 1];
-    if (len === undefined) return null;
-    if (tlvType === 0x03) {
-      if (len === 0xff) return null; // 拡張長は非対応
-      return { offset, length: len };
-    }
-    offset += 2 + len;
-  }
-  return null;
+/** カードの page4 以降を読み、NDEF Textレコードの本文を返す(無ければ null)。他typeのレコードは無視する。 */
+async function readNdefText(reader: any): Promise<string | null> {
+  const records = await readNdefRecords(reader);
+  const textRecord = records.find(isTextRecord);
+  return textRecord ? decodeTextRecordPayload(textRecord.payload) : null;
 }
 
 /** 発行アーム中に card イベントが来た場合、NDEF書込を行う。処理した場合 true を返す。 */
@@ -386,14 +325,38 @@ async function handlePendingIssue(reader: any, card: any): Promise<boolean> {
 
   try {
     const text = encodeTicketPayload(req.payload);
-    const message = buildNdefTextMessage(text);
+    const textRecord: RawNdefRecord = {
+      tnf: TNF_WELL_KNOWN,
+      type: TEXT_RECORD_TYPE,
+      payload: encodeTextRecordPayload(text),
+    };
+
+    // read: 既存のNDEFメッセージを読み取り、自分のTextレコード以外(他アプリが書いた
+    // レコード等)を保持したまま、Textレコードだけを置き換える/無ければ追加する。
+    const existingRecords = await readNdefRecords(reader);
+    const textIndex = existingRecords.findIndex(isTextRecord);
+    const records = [...existingRecords];
+    if (textIndex >= 0) {
+      records[textIndex] = textRecord;
+    } else {
+      records.push(textRecord);
+    }
+
+    // modify: 全レコードを1つのNDEFメッセージに再構成する。
+    const message = encodeNdefMessage(records);
 
     // 4バイト境界にパディングしてページ単位で逐次書込する。
     // (参考実装同様、並列書込ではなくページごとに await することでハードウェア互換性を優先)
     const paddedLength = Math.ceil(message.length / PAGE_SIZE) * PAGE_SIZE;
+    if (paddedLength > TAG_USER_MEMORY_CAPACITY) {
+      throw new Error(
+        `書込データ(${paddedLength}B)がタグの容量(${TAG_USER_MEMORY_CAPACITY}B)を超えています。`
+      );
+    }
     const padded = Buffer.alloc(paddedLength, 0);
     message.copy(padded, 0);
 
+    // write: 再構成したメッセージを書き戻す。
     for (let offset = 0; offset < padded.length; offset += PAGE_SIZE) {
       const page = USER_MEMORY_START_PAGE + offset / PAGE_SIZE;
       const chunk = padded.subarray(offset, offset + PAGE_SIZE);
@@ -419,7 +382,7 @@ async function handlePendingIdentify(reader: any, card: any): Promise<boolean> {
   pendingIdentify = null;
 
   try {
-    const raw = await readNdef(reader);
+    const raw = await readNdefText(reader);
     const payload = raw ? decodeTicketPayload(raw) : null;
     req.resolve({ uid: card.uid, payload, raw: raw ?? "" });
   } catch (err) {

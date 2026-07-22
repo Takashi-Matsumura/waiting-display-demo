@@ -50,23 +50,26 @@ export default function CheckinScreen() {
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-6 py-8 lg:px-8">
-      <header className="flex items-center justify-between">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-1 flex-col gap-4 px-6 py-6 lg:px-8 2xl:max-w-[1900px] 2xl:gap-6 2xl:px-16 2xl:py-8">
+      <header className="flex shrink-0 items-center justify-between border-b border-white/10 pb-4 2xl:pb-4">
         <div>
-          <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+          <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300 2xl:text-lg">
             ← ホームに戻る
           </Link>
-          <h1 className="mt-2 text-3xl font-black tracking-tight">受付</h1>
+          <div className="mt-2 flex items-center gap-3">
+            <span className="h-8 w-1.5 shrink-0 rounded-full bg-gradient-to-b from-sky-400 to-indigo-500 shadow-[0_0_16px_rgba(56,189,248,0.6)] 2xl:h-10" />
+            <h1 className="text-3xl font-black tracking-tight 2xl:text-5xl">受付</h1>
+          </div>
         </div>
         {updatedAt && (
-          <span className="text-sm text-zinc-500">
+          <span className="text-sm text-zinc-500 2xl:text-lg">
             最終更新 {updatedAt.toLocaleTimeString("ja-JP")}
           </span>
         )}
       </header>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:divide-x lg:divide-white/10">
-        <div className="flex flex-col gap-6">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-8 lg:grid-cols-2 lg:divide-x lg:divide-sky-400/10 2xl:gap-12">
+        <div className="flex min-h-0 flex-col gap-6 overflow-y-auto">
           <CheckinPanel />
           <CurrentNextBoard
             current={data?.current ?? null}
@@ -74,7 +77,7 @@ export default function CheckinScreen() {
             totals={data?.totals ?? null}
           />
         </div>
-        <div className="lg:pl-8">
+        <div className="flex min-h-0 flex-col lg:pl-8 2xl:pl-12">
           <IssuanceStatus
             slots={data?.slots ?? []}
             totals={data?.totals ?? null}

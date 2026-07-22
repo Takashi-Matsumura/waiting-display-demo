@@ -39,17 +39,17 @@ export default function CurrentNextBoard({
   const allIssued = totals !== null && totals.capacity > 0 && totals.remaining <= 0;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex shrink-0 flex-col gap-4 2xl:gap-4">
       {current ? (
         <SlotProgressCard slot={current} badge="現在開催中" />
       ) : (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-zinc-400">
+        <div className="glass-card rounded-2xl p-6 text-center text-zinc-400 2xl:p-6 2xl:text-xl">
           現在受付中の枠はありません
         </div>
       )}
 
       {allIssued ? (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-zinc-400">
+        <div className="glass-card rounded-2xl p-6 text-center text-zinc-400 2xl:p-6 2xl:text-xl">
           本日の受付は終了しました
         </div>
       ) : (
@@ -61,14 +61,14 @@ export default function CurrentNextBoard({
 
 function UpcomingCard({ slot, badge }: { slot: SlotStat; badge: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+    <div className="glass-card rounded-2xl p-6 2xl:p-6">
       <div className="flex items-baseline justify-between">
-        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-zinc-300">
+        <span className="rounded-full bg-indigo-500/15 px-3 py-1 text-xs font-medium text-indigo-300 ring-1 ring-inset ring-indigo-400/25 2xl:px-4 2xl:py-1 2xl:text-sm">
           {badge}
         </span>
-        <span className="text-2xl font-bold">{slot.label}</span>
+        <span className="text-2xl font-bold 2xl:text-4xl">{slot.label}</span>
       </div>
-      <p className="mt-4 text-lg text-zinc-300">
+      <p className="mt-4 text-lg text-zinc-300 2xl:mt-3 2xl:text-xl">
         {slot.startTime}の5分前から受付を開始します。今しばらくお待ちください。
       </p>
     </div>
@@ -79,26 +79,33 @@ function SlotProgressCard({ slot, badge }: { slot: SlotStat; badge: string }) {
   const ratio = slot.capacity > 0 ? Math.min(1, slot.issued / slot.capacity) : 0;
   const isFull = slot.remaining <= 0;
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+    <div className="glass-card rounded-2xl p-6 2xl:p-6">
       <div className="flex items-baseline justify-between">
-        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-zinc-300">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-400/15 px-3 py-1 text-xs font-medium text-cyan-300 ring-1 ring-inset ring-cyan-400/30 2xl:px-4 2xl:py-1 2xl:text-sm">
+          <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.9)]" />
           {badge}
         </span>
-        <span className="text-2xl font-bold">{slot.label}</span>
+        <span className="text-2xl font-bold 2xl:text-4xl">{slot.label}</span>
       </div>
-      <div className="mt-3 flex items-baseline justify-between">
-        <span className="text-lg text-zinc-300">発行 / 定員</span>
-        <span className={`text-4xl font-black ${isFull ? "text-red-400" : "text-green-400"}`}>
+      <div className="mt-3 flex items-baseline justify-between 2xl:mt-3">
+        <span className="text-lg text-zinc-300 2xl:text-xl">発行 / 定員</span>
+        <span
+          className={`text-4xl font-black 2xl:text-6xl ${isFull ? "text-red-400" : "text-emerald-400"}`}
+        >
           {slot.issued} / {slot.capacity}
         </span>
       </div>
-      <div className="mt-4 h-6 w-full overflow-hidden rounded-full bg-white/10">
+      <div className="mt-4 h-6 w-full overflow-hidden rounded-full bg-white/10 ring-1 ring-inset ring-white/5 2xl:mt-3 2xl:h-7">
         <div
-          className={`h-full rounded-full transition-all ${isFull ? "bg-red-500" : "bg-green-500"}`}
+          className={`h-full rounded-full transition-all ${
+            isFull
+              ? "bg-gradient-to-r from-red-500 to-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.6)]"
+              : "bg-gradient-to-r from-emerald-500 to-green-400 shadow-[0_0_12px_rgba(16,185,129,0.6)]"
+          }`}
           style={{ width: `${ratio * 100}%` }}
         />
       </div>
-      <div className="mt-2 flex justify-between text-lg text-zinc-300">
+      <div className="mt-2 flex justify-between text-lg text-zinc-300 2xl:mt-2 2xl:text-xl">
         <span>チェックイン {slot.checkedIn}</span>
         <span>{isFull ? "満員" : `残り ${slot.remaining}`}</span>
       </div>

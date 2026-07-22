@@ -12,6 +12,7 @@ const NAV_ITEMS = [
     title: "受付ディスプレイ",
     description: "当日、NTAGでチェックインし、現在/次の受付状況と発行状況を表示します。",
     newTab: true,
+    invert: true,
   },
 ];
 
@@ -23,22 +24,34 @@ export default function Home() {
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
           イベントブースでのNTAG整理券の発行・受付・表示を行います。
         </p>
-        <div className="mt-10 flex flex-col gap-4">
+        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {NAV_ITEMS.map((item, index) => (
             <Link
               key={item.href}
               href={item.href}
               target={item.newTab ? "_blank" : undefined}
               rel={item.newTab ? "noopener noreferrer" : undefined}
-              className="rounded-xl border border-black/10 bg-white p-6 transition-colors hover:border-black/20 dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20"
+              className={`rounded-xl border p-6 transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-lg ${
+                item.invert
+                  ? "border-white/10 bg-black text-white hover:border-white/20 hover:shadow-white/5"
+                  : "border-black/10 bg-white hover:border-black/20 dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20"
+              }`}
             >
               <div className="flex items-center gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-bold text-background">
+                <span
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                    item.invert ? "bg-white text-black" : "bg-foreground text-background"
+                  }`}
+                >
                   {index + 1}
                 </span>
                 <h2 className="text-lg font-semibold">{item.title}</h2>
               </div>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <p
+                className={`mt-2 text-sm ${
+                  item.invert ? "text-zinc-400" : "text-zinc-600 dark:text-zinc-400"
+                }`}
+              >
                 {item.description}
               </p>
             </Link>

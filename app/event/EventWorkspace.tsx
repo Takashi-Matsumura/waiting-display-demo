@@ -82,7 +82,7 @@ export default function EventWorkspace() {
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{meta.description}</p>
 
       <div className="mt-8 flex flex-col gap-6">
-        <NfcStatusBar nfc={nfc} />
+        {mode === "issue" && <NfcStatusBar nfc={nfc} />}
         {mode === "prepare" ? (
           <EventSetupPanel onBusyChange={setPanelBusy} />
         ) : (

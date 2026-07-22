@@ -1,21 +1,11 @@
 "use client";
 
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { jsonFetcher } from "@/lib/fetcher";
 import { encodeTicketPayload } from "@/lib/payload";
-
-interface SlotStat {
-  id: number;
-  key: string;
-  label: string;
-  startTime: string | null;
-  endTime: string | null;
-  capacity: number;
-  issued: number;
-  checkedIn: number;
-  remaining: number;
-}
+import { useNfcStatus } from "@/app/hooks/useNfcStatus";
+import { formatTimeRange, useSlots, type SlotStat } from "@/app/hooks/useSlots";
 
 interface TicketDetail {
   ticketNumber: string;
@@ -24,34 +14,19 @@ interface TicketDetail {
   reissuedAt: number | null;
 }
 
-interface NfcStatus {
-  connected: boolean;
-  readerName: string;
-  mode: "idle" | "issuing" | "identifying";
-}
-
 interface PrepareResult {
   slotId: number;
   text: string;
   kind: "ok" | "error" | "info";
 }
 
-const POLL_INTERVAL_MS = 3000;
-
-function formatTimeRange(startTime: string | null, endTime: string | null): string {
-  if (!startTime && !endTime) return "—";
-  return `${startTime ?? "—"}〜${endTime ?? "—"}`;
-}
-
-export default function EventSetupPanel() {
-  const { data, mutate, isLoading } = useSWR<{ slots: SlotStat[] }>(
-    "/api/slots",
-    jsonFetcher,
-    { refreshInterval: POLL_INTERVAL_MS }
-  );
-  const { data: nfc } = useSWR<NfcStatus>("/api/nfc", jsonFetcher, {
-    refreshInterval: 2000,
-  });
+export default function EventSetupPanel({
+  onBusyChange,
+}: {
+  onBusyChange?: (busy: boolean) => void;
+}) {
+  const { data, mutate, isLoading } = useSlots();
+  const { data: nfc } = useNfcStatus();
   const slots = data?.slots ?? [];
 
   // ---- 時間枠の追加フォーム ----
@@ -87,6 +62,10 @@ export default function EventSetupPanel() {
   const { mutate: globalMutate } = useSWRConfig();
 
   const isBusy = activeSlotId !== null || activeReissueNumber !== null;
+
+  useEffect(() => {
+    onBusyChange?.(isBusy);
+  }, [isBusy, onBusyChange]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -539,16 +518,6 @@ export default function EventSetupPanel() {
 
         <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-zinc-900">
           <h3 className="text-lg font-semibold">NFCリーダー</h3>
-          <div className="flex items-center gap-2 text-sm">
-            <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${nfc?.connected ? "bg-green-500" : "bg-zinc-400"}`}
-            />
-            {nfc === undefined
-              ? "リーダー状態を確認中…"
-              : nfc.connected
-                ? `接続中: ${nfc.readerName}`
-                : "未接続"}
-          </div>
           {nfc !== undefined && !nfc.connected && (
             <p className="text-xs text-zinc-500">
               「手動準備」を有効にしないと、準備ボタンはタグ書込待ちのまま失敗します。

@@ -2,14 +2,10 @@ import Link from "next/link";
 
 const NAV_ITEMS = [
   {
-    href: "/setup",
-    title: "イベント準備",
-    description: "時間枠の登録と、NTAGへの整理番号書き込み（準備）をまとめて行います。",
-  },
-  {
-    href: "/issue",
-    title: "トークン発行",
-    description: "当日、タグをかざして受付名を書き込み発行します。",
+    href: "/event",
+    title: "イベント準備・発行",
+    description:
+      "時間枠の準備から当日の整理券発行まで、モードを切り替えてこの画面でまとめて行います。",
   },
   {
     href: "/checkin",
@@ -27,16 +23,14 @@ export default function Home() {
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
           イベントブースでのNTAG整理券の発行・受付・表示を行います。
         </p>
-        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="mt-10 flex flex-col gap-4">
           {NAV_ITEMS.map((item, index) => (
             <Link
               key={item.href}
               href={item.href}
               target={item.newTab ? "_blank" : undefined}
               rel={item.newTab ? "noopener noreferrer" : undefined}
-              className={`rounded-xl border border-black/10 bg-white p-6 transition-colors hover:border-black/20 dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20 ${
-                index === 0 ? "sm:col-span-2" : ""
-              }`}
+              className="rounded-xl border border-black/10 bg-white p-6 transition-colors hover:border-black/20 dark:border-white/10 dark:bg-zinc-900 dark:hover:border-white/20"
             >
               <div className="flex items-center gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-bold text-background">

@@ -1,19 +1,7 @@
-import BackLink from "@/app/components/BackLink";
-import IssuePanel from "./IssuePanel";
+import { redirect } from "next/navigation";
 
+// 「イベント準備」と統合され「イベント準備・発行」になったため、旧URLをブックマークしている
+// 場合に備えて /event の整理券発行モードへリダイレクトする(削除して404にはしない)。
 export default function IssuePage() {
-  return (
-    <div className="flex flex-1 flex-col bg-zinc-50 dark:bg-black">
-      <div className="mx-auto w-full max-w-2xl flex-1 px-6 py-10">
-        <BackLink />
-        <h1 className="mt-4 text-2xl font-bold tracking-tight">整理券 発行</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          タグをかざして準備済みの整理番号・時間枠を確認し、受付名を書き込んで発行します。
-        </p>
-        <div className="mt-8">
-          <IssuePanel />
-        </div>
-      </div>
-    </div>
-  );
+  redirect("/event?mode=issue");
 }

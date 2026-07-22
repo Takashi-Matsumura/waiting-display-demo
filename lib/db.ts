@@ -566,6 +566,9 @@ export function getStats(): {
 /** 「全整理券発行済み時」に表示する案内コメントの設定キー。 */
 export const SETTING_ANNOUNCEMENT = "announcement";
 
+/** 受付ディスプレイの見出しに表示するイベントタイトルの設定キー。 */
+export const SETTING_EVENT_TITLE = "event_title";
+
 export function getSetting(key: string): string | null {
   const row = getDb().prepare(`SELECT value FROM settings WHERE key = ?`).get(key) as
     | { value: string }

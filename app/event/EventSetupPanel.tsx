@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { jsonFetcher } from "@/lib/fetcher";
 import { encodeTicketPayload } from "@/lib/payload";
+import NfcStatusBar from "@/app/components/NfcStatusBar";
 import { useNfcStatus } from "@/app/hooks/useNfcStatus";
 import { formatTimeRange, useSlots, type SlotStat } from "@/app/hooks/useSlots";
 
@@ -516,8 +517,11 @@ export default function EventSetupPanel({
       <div className="flex flex-col gap-6 lg:col-span-1">
         <h2 className="text-xl font-bold tracking-tight">アプリ設定</h2>
 
+        <EventTitleEditor />
+
         <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-zinc-900">
           <h3 className="text-lg font-semibold">NFCリーダー</h3>
+          <NfcStatusBar nfc={nfc} />
           {nfc !== undefined && !nfc.connected && (
             <p className="text-xs text-zinc-500">
               「手動準備」を有効にしないと、準備ボタンはタグ書込待ちのまま失敗します。
@@ -637,9 +641,71 @@ function SlotTicketList({
   );
 }
 
+interface SettingsResponse {
+  announcement: string;
+  eventTitle: string;
+}
+
+/** 受付ディスプレイの見出し「受付」の前に表示するイベントタイトルの編集セクション。 */
+function EventTitleEditor() {
+  const { data, mutate } = useSWR<SettingsResponse>("/api/settings", jsonFetcher);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const value = draft ?? data?.eventTitle ?? "";
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventTitle: value }),
+      });
+      await mutate();
+      setDraft(null);
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-zinc-900">
+      <h3 className="text-lg font-semibold">イベントタイトル</h3>
+      <p className="text-xs text-zinc-500">
+        受付ディスプレイの見出し「受付」の前に表示するイベント名です。空欄なら何も表示しません。
+      </p>
+      <input
+        type="text"
+        className="rounded-md border border-black/15 px-3 py-2 text-sm dark:border-white/15 dark:bg-black"
+        placeholder="例: 〇〇祭 2026"
+        value={value}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setSaved(false);
+        }}
+      />
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="w-fit rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background disabled:opacity-50"
+        >
+          保存
+        </button>
+        {saved && <span className="text-sm text-green-700 dark:text-green-400">保存しました</span>}
+      </div>
+    </div>
+  );
+}
+
 /** 全整理券発行済み時に統合画面へ表示する案内コメントの編集セクション。 */
 function AnnouncementEditor() {
-  const { data, mutate } = useSWR<{ announcement: string }>("/api/settings", jsonFetcher);
+  const { data, mutate } = useSWR<SettingsResponse>("/api/settings", jsonFetcher);
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);

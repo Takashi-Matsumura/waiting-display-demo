@@ -33,6 +33,7 @@ interface StatsResponse {
   current: SlotStat | null;
   next: SlotStat | null;
   announcement: string;
+  eventTitle: string;
 }
 
 const POLL_INTERVAL_MS = 2500;
@@ -58,7 +59,9 @@ export default function CheckinScreen() {
           </Link>
           <div className="mt-2 flex items-center gap-3">
             <span className="h-8 w-1.5 shrink-0 rounded-full bg-gradient-to-b from-sky-400 to-indigo-500 shadow-[0_0_16px_rgba(56,189,248,0.6)] 2xl:h-10" />
-            <h1 className="text-3xl font-black tracking-tight 2xl:text-5xl">受付</h1>
+            <h1 className="text-3xl font-black tracking-tight 2xl:text-5xl">
+              {data?.eventTitle ? `${data.eventTitle} ` : ""}受付
+            </h1>
           </div>
         </div>
         {updatedAt && (

@@ -2,7 +2,7 @@ import CheckinScreen from "./CheckinScreen";
 
 export default function CheckinPage() {
   return (
-    <div className="flex flex-1 flex-col bg-black text-white">
+    <div className="checkin-backdrop flex h-screen flex-1 flex-col overflow-hidden text-white">
       <CheckinScreen />
     </div>
   );

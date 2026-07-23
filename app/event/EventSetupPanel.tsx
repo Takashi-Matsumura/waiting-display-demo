@@ -59,8 +59,18 @@ export default function EventSetupPanel({
   // activeReissueNumber が非nullの間、その整理番号がNFCタグの書込待ち状態。
   // 「準備」と同じNFCリーダーを共有するため、isBusy に合流させて相互排他にする。
   const [activeReissueNumber, setActiveReissueNumber] = useState<string | null>(null);
+  const [armingReissue, setArmingReissue] = useState<{
+    slotId: number;
+    slotKey: string;
+    ticketNumber: string;
+    name: string | null;
+  } | null>(null);
   const [expandedSlotId, setExpandedSlotId] = useState<number | null>(null);
   const { mutate: globalMutate } = useSWRConfig();
+
+  // ---- 全ての予約(整理券)のリセット ----
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   const isBusy = activeSlotId !== null || activeReissueNumber !== null;
 
@@ -130,13 +140,42 @@ export default function EventSetupPanel({
     await mutate();
   }
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: number, label: string) {
+    if (!window.confirm(`時間枠「${label}」を削除します。この操作は取り消せません。よろしいですか？`)) {
+      return;
+    }
     const res = await fetch(`/api/slots/${id}`, { method: "DELETE" });
     if (res.ok) {
       await mutate();
     } else {
       const resData = await res.json();
       alert(resData.error ?? "削除に失敗しました。");
+    }
+  }
+
+  async function handleResetAllTickets() {
+    if (
+      !window.confirm(
+        "全ての時間枠の整理券（予約）を削除します。発行数・チェックイン数は0に戻り、この操作は取り消せません。よろしいですか？"
+      )
+    ) {
+      return;
+    }
+    setResetting(true);
+    setResetMessage(null);
+    try {
+      const res = await fetch("/api/tickets/reset", { method: "POST" });
+      if (!res.ok) {
+        const resData = await res.json();
+        setResetMessage(resData.error ?? "リセットに失敗しました。");
+        return;
+      }
+      await mutate();
+      setResetMessage("全ての予約をリセットしました。");
+    } catch {
+      setResetMessage("通信エラーが発生しました。");
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -186,11 +225,17 @@ export default function EventSetupPanel({
     setResultMessage({ slotId, text: "準備をキャンセルしました。", kind: "info" });
   }
 
-  async function handleReissue(slotId: number, ticketNumber: string) {
+  async function handleReissue(
+    slotId: number,
+    ticketNumber: string,
+    name: string | null,
+    slotKey: string
+  ) {
     if (isBusy || editingId !== null) return;
 
     abortRef.current = false;
     setActiveReissueNumber(ticketNumber);
+    setArmingReissue({ slotId, slotKey, ticketNumber, name });
     setResultMessage(null);
     try {
       const res = await fetch("/api/prepare/reissue", {
@@ -207,6 +252,7 @@ export default function EventSetupPanel({
           kind: "error",
         });
         setActiveReissueNumber(null);
+        setArmingReissue(null);
         return;
       }
       setResultMessage({
@@ -215,12 +261,14 @@ export default function EventSetupPanel({
         kind: "ok",
       });
       setActiveReissueNumber(null);
+      setArmingReissue(null);
       await mutate(); // /api/slots (件数は変わらないが念のため)
       await globalMutate(`/api/slots/${slotId}/tickets`);
     } catch {
       if (!abortRef.current) {
         setResultMessage({ slotId, text: "通信エラーが発生しました。", kind: "error" });
         setActiveReissueNumber(null);
+        setArmingReissue(null);
       }
     }
   }
@@ -229,10 +277,17 @@ export default function EventSetupPanel({
     abortRef.current = true;
     await fetch("/api/prepare", { method: "DELETE" }); // 汎用キャンセル(何がアームしたかは問わない)
     setActiveReissueNumber(null);
+    setArmingReissue(null);
     setResultMessage({ slotId, text: "再発行をキャンセルしました。", kind: "info" });
   }
 
+  const armingSlot = slots.find((s) => s.id === activeSlotId) ?? null;
+  const armingSuggested = armingSlot
+    ? `${armingSlot.key}-${String(armingSlot.capacity - armingSlot.remaining + 1).padStart(2, "0")}`
+    : null;
+
   return (
+    <>
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
       {/* 左: 時間枠 / トークン準備 */}
       <div className="flex flex-col gap-6 lg:col-span-3">
@@ -246,7 +301,7 @@ export default function EventSetupPanel({
           )}
           {slots.length > 0 && (
             <div className="overflow-x-auto rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-zinc-900">
-              <table className="w-full text-left text-sm">
+              <table className="w-full min-w-max text-left text-sm">
                 <thead>
                   <tr className="border-b border-black/10 text-xs text-zinc-500 dark:border-white/10">
                     <th className="px-4 py-3 font-medium">表示名</th>
@@ -261,7 +316,6 @@ export default function EventSetupPanel({
                 <tbody>
                   {slots.map((slot) => {
                     const isEditing = editingId === slot.id;
-                    const isArming = activeSlotId === slot.id;
                     const isExpanded = expandedSlotId === slot.id;
                     const suggested =
                       slot.remaining > 0
@@ -346,61 +400,39 @@ export default function EventSetupPanel({
                               <td className="px-4 py-2">{slot.remaining}</td>
                               <td className="px-4 py-2 text-zinc-500">{suggested ?? "満員"}</td>
                               <td className="px-4 py-2">
-                                {isArming ? (
-                                  <div className="flex flex-col gap-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs font-medium">タグをかざしてください…</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleCancelPrepare(slot.id)}
-                                        className="rounded-full border border-black/15 px-3 py-1 text-xs dark:border-white/15"
-                                      >
-                                        キャンセル
-                                      </button>
-                                    </div>
-                                    {suggested && (
-                                      <p className="break-all text-[10px] text-zinc-500">
-                                        {encodeTicketPayload({ t: suggested, n: "", s: slot.key })}
-                                      </p>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="flex gap-2">
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handlePrepare(slot)}
+                                    disabled={disablePrepare}
+                                    className="rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-40"
+                                  >
+                                    準備
+                                  </button>
+                                  <button
+                                    onClick={() => startEdit(slot)}
+                                    disabled={disableEditBtn}
+                                    className="rounded-full border border-black/15 px-3 py-1 text-xs disabled:opacity-40 dark:border-white/15"
+                                  >
+                                    編集
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(slot.id, slot.label)}
+                                    disabled={disableDeleteBtn}
+                                    className="rounded-full border border-red-300 px-3 py-1 text-xs text-red-600 disabled:opacity-40 dark:border-red-900 dark:text-red-400"
+                                  >
+                                    削除
+                                  </button>
+                                  {slot.issued > 0 && (
                                     <button
-                                      onClick={() => handlePrepare(slot)}
-                                      disabled={disablePrepare}
-                                      className="rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-40"
-                                    >
-                                      準備
-                                    </button>
-                                    <button
-                                      onClick={() => startEdit(slot)}
-                                      disabled={disableEditBtn}
+                                      type="button"
+                                      onClick={() => setExpandedSlotId(isExpanded ? null : slot.id)}
+                                      disabled={isBusy}
                                       className="rounded-full border border-black/15 px-3 py-1 text-xs disabled:opacity-40 dark:border-white/15"
                                     >
-                                      編集
+                                      {isExpanded ? "▾" : "▸"} 整理券 {slot.issued}
                                     </button>
-                                    <button
-                                      onClick={() => handleDelete(slot.id)}
-                                      disabled={disableDeleteBtn}
-                                      className="rounded-full border border-red-300 px-3 py-1 text-xs text-red-600 disabled:opacity-40 dark:border-red-900 dark:text-red-400"
-                                    >
-                                      削除
-                                    </button>
-                                    {slot.issued > 0 && (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setExpandedSlotId(isExpanded ? null : slot.id)
-                                        }
-                                        disabled={isBusy}
-                                        className="rounded-full border border-black/15 px-3 py-1 text-xs disabled:opacity-40 dark:border-white/15"
-                                      >
-                                        {isExpanded ? "▾" : "▸"} 整理券 {slot.issued}
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
+                                  )}
+                                </div>
                               </td>
                             </>
                           )}
@@ -427,10 +459,8 @@ export default function EventSetupPanel({
                               <SlotTicketList
                                 slotId={slot.id}
                                 slotKey={slot.key}
-                                activeReissueNumber={activeReissueNumber}
                                 isBusy={isBusy}
                                 onReissue={handleReissue}
-                                onCancelReissue={handleCancelReissue}
                               />
                             </td>
                           </tr>
@@ -539,8 +569,100 @@ export default function EventSetupPanel({
         </div>
 
         <AnnouncementEditor />
+
+        <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-white p-6 dark:border-red-900/40 dark:bg-zinc-900">
+          <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
+            全ての予約をリセット
+          </h3>
+          <p className="text-xs text-zinc-500">
+            全ての時間枠に紐づく整理券（予約）を削除し、発行数・チェックイン数を0に戻します。時間枠自体の設定（表示名・時間・定員）は残ります。この操作は取り消せません。
+          </p>
+          <button
+            type="button"
+            onClick={handleResetAllTickets}
+            disabled={resetting || isBusy || editingId !== null}
+            className="w-fit rounded-full border border-red-300 px-5 py-2 text-sm font-medium text-red-600 disabled:opacity-50 dark:border-red-900 dark:text-red-400"
+          >
+            全ての予約をリセット
+          </button>
+          {resetMessage && (
+            <span className="text-sm text-zinc-600 dark:text-zinc-400">{resetMessage}</span>
+          )}
+        </div>
       </div>
     </div>
+
+    {armingSlot && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      >
+        <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+          <h3 className="text-lg font-semibold">NTAGへの書き込み</h3>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            時間枠「{armingSlot.label}」の整理番号{" "}
+            <span className="font-medium text-foreground">{armingSuggested}</span>{" "}
+            を準備します。
+          </p>
+          <div className="mt-6 flex flex-col items-center gap-3 rounded-lg border border-dashed border-black/15 py-8 dark:border-white/15">
+            <span className="text-sm font-medium">タグをかざしてください…</span>
+            {armingSuggested && (
+              <p className="break-all px-4 text-center text-[10px] text-zinc-500">
+                {encodeTicketPayload({ t: armingSuggested, n: "", s: armingSlot.key })}
+              </p>
+            )}
+          </div>
+          <div className="mt-6 flex justify-end">
+            <button
+              type="button"
+              onClick={() => handleCancelPrepare(armingSlot.id)}
+              className="rounded-full border border-black/15 px-4 py-2 text-sm dark:border-white/15"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {armingReissue && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      >
+        <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+          <h3 className="text-lg font-semibold">NTAGへの再発行</h3>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            整理番号{" "}
+            <span className="font-medium text-foreground">{armingReissue.ticketNumber}</span>
+            {armingReissue.name ? `（${armingReissue.name}）` : ""}
+            の物理タグを再発行します。
+          </p>
+          <div className="mt-6 flex flex-col items-center gap-3 rounded-lg border border-dashed border-black/15 py-8 dark:border-white/15">
+            <span className="text-sm font-medium">タグをかざしてください…</span>
+            <p className="break-all px-4 text-center text-[10px] text-zinc-500">
+              {encodeTicketPayload({
+                t: armingReissue.ticketNumber,
+                n: armingReissue.name ?? "",
+                s: armingReissue.slotKey,
+              })}
+            </p>
+          </div>
+          <div className="mt-6 flex justify-end">
+            <button
+              type="button"
+              onClick={() => handleCancelReissue(armingReissue.slotId)}
+              className="rounded-full border border-black/15 px-4 py-2 text-sm dark:border-white/15"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -551,17 +673,13 @@ export default function EventSetupPanel({
 function SlotTicketList({
   slotId,
   slotKey,
-  activeReissueNumber,
   isBusy,
   onReissue,
-  onCancelReissue,
 }: {
   slotId: number;
   slotKey: string;
-  activeReissueNumber: string | null;
   isBusy: boolean;
-  onReissue: (slotId: number, ticketNumber: string) => void;
-  onCancelReissue: (slotId: number) => void;
+  onReissue: (slotId: number, ticketNumber: string, name: string | null, slotKey: string) => void;
 }) {
   const { data, isLoading } = useSWR<{ tickets: TicketDetail[] }>(
     `/api/slots/${slotId}/tickets`,
@@ -579,7 +697,6 @@ function SlotTicketList({
         <p className="text-xs text-zinc-500">発行済みの整理券がありません。</p>
       )}
       {tickets.map((t) => {
-        const isArming = activeReissueNumber === t.ticketNumber;
         const named = t.name != null && t.name !== "";
         const statusLabel =
           t.status === "checked_in"
@@ -608,32 +725,14 @@ function SlotTicketList({
                 </span>
               )}
             </div>
-            {isArming ? (
-              <div className="flex flex-col items-end gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium">タグをかざしてください…</span>
-                  <button
-                    type="button"
-                    onClick={() => onCancelReissue(slotId)}
-                    className="rounded-full border border-black/15 px-3 py-1 text-xs dark:border-white/15"
-                  >
-                    キャンセル
-                  </button>
-                </div>
-                <p className="break-all text-[10px] text-zinc-500">
-                  {encodeTicketPayload({ t: t.ticketNumber, n: t.name ?? "", s: slotKey })}
-                </p>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onReissue(slotId, t.ticketNumber)}
-                disabled={isBusy || t.status === "void"}
-                className="rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-40"
-              >
-                再発行
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => onReissue(slotId, t.ticketNumber, t.name, slotKey)}
+              disabled={isBusy || t.status === "void"}
+              className="rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-40"
+            >
+              再発行
+            </button>
           </div>
         );
       })}

@@ -17,11 +17,17 @@ interface Totals {
   remaining: number;
 }
 
+interface LunchBreak {
+  startTime: string;
+  endTime: string;
+}
+
 /**
  * 「現在開催中」を進捗バー付きで表示する。current/nextの判定はサーバー
  * (/api/stats)がローカル時刻で行い、そのまま受け取って描画するだけ。
  *
- * - 現在開催中の枠が無い場合は「現在受付中の枠はありません」と表示する
+ * - 現在開催中の枠が無い場合、時刻がお昼休みの空き時間帯と重なっていれば
+ *   「お昼休み」カードを、そうでなければ「現在受付中の枠はありません」を表示する
  *   (開始5分前からしか受付できない仕様のため、これは正常な状態)。
  * - 「次の開催」案内は current の有無に関わらず、next が存在すれば常に表示する。
  * - 「本日の受付は終了しました」は時刻ではなく、全整理券が発行済み(残数0)かどうかで判定する。
@@ -31,10 +37,14 @@ export default function CurrentNextBoard({
   current,
   next,
   totals,
+  lunchBreak,
+  isLunchBreakNow,
 }: {
   current: SlotStat | null;
   next: SlotStat | null;
   totals: Totals | null;
+  lunchBreak: LunchBreak | null;
+  isLunchBreakNow: boolean;
 }) {
   const allIssued = totals !== null && totals.capacity > 0 && totals.remaining <= 0;
 
@@ -42,6 +52,18 @@ export default function CurrentNextBoard({
     <div className="flex shrink-0 flex-col gap-4 2xl:gap-4">
       {current ? (
         <SlotProgressCard slot={current} badge="現在開催中" />
+      ) : isLunchBreakNow && lunchBreak ? (
+        <div className="glass-card rounded-2xl p-6 text-center 2xl:p-6">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 px-3 py-1 text-xs font-medium text-amber-300 ring-1 ring-inset ring-amber-400/25 2xl:px-4 2xl:py-1 2xl:text-sm">
+            お昼休み
+          </span>
+          <p className="mt-4 text-2xl font-bold 2xl:text-4xl">
+            {lunchBreak.startTime}〜{lunchBreak.endTime}
+          </p>
+          <p className="mt-2 text-lg text-zinc-300 2xl:text-xl">
+            ただいまお昼休み中です。{lunchBreak.endTime}から受付を再開します。
+          </p>
+        </div>
       ) : (
         <div className="glass-card rounded-2xl p-6 text-center text-zinc-400 2xl:p-6 2xl:text-xl">
           現在受付中の枠はありません

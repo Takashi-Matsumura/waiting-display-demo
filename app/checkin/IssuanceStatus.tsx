@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 interface SlotStat {
   id: number;
   key: string;
@@ -8,6 +10,7 @@ interface SlotStat {
   issued: number;
   checkedIn: number;
   remaining: number;
+  isPast?: boolean;
 }
 
 interface Totals {
@@ -17,18 +20,26 @@ interface Totals {
   remaining: number;
 }
 
+interface LunchBreak {
+  startTime: string;
+  endTime: string;
+}
+
 /**
  * 全体の整理券発行状況(合計＋全枠一覧)を表示する。全券が発行され残数が無くなった
  * 場合は、/setup で設定された案内コメント(announcement)をここに表示する。
+ * 12時台と重なる空き時間帯がある場合は、その直前に「お昼休み」の区切りを挟んで表示する。
  */
 export default function IssuanceStatus({
   slots,
   totals,
   announcement,
+  lunchBreak,
 }: {
   slots: SlotStat[];
   totals: Totals | null;
   announcement: string;
+  lunchBreak: LunchBreak | null;
 }) {
   const soldOut = totals !== null && totals.remaining <= 0 && totals.capacity > 0;
 
@@ -54,17 +65,37 @@ export default function IssuanceStatus({
         )}
         {slots.map((slot) => {
           const isFull = slot.remaining <= 0;
+          const isPast = slot.isPast === true;
+          const showLunchBreakBefore =
+            lunchBreak !== null && slot.startTime === lunchBreak.endTime;
           return (
-            <div
-              key={slot.id}
-              className="glass-card flex shrink-0 items-center justify-between rounded-lg px-4 py-2 text-sm 2xl:px-6 2xl:py-3 2xl:text-xl"
-            >
-              <span className="font-medium">{slot.label}</span>
-              <span className={isFull ? "text-red-400" : "text-zinc-300"}>
-                {slot.issued} / {slot.capacity}
-                {isFull ? "（満員）" : ""}
-              </span>
-            </div>
+            <Fragment key={slot.id}>
+              {showLunchBreakBefore && (
+                <div className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed border-amber-400/30 bg-amber-400/5 px-4 py-2 text-sm font-medium text-amber-300 2xl:px-6 2xl:py-3 2xl:text-xl">
+                  お昼休み（{lunchBreak.startTime}〜{lunchBreak.endTime}）
+                </div>
+              )}
+              <div
+                className={`glass-card flex shrink-0 items-center justify-between rounded-lg px-4 py-2 text-sm transition-opacity 2xl:px-6 2xl:py-3 2xl:text-xl ${
+                  isPast ? "opacity-45" : ""
+                }`}
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  {isPast && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-zinc-400 ring-1 ring-inset ring-white/10 2xl:text-xs">
+                      ✓ 終了
+                    </span>
+                  )}
+                  <span className={isPast ? "line-through decoration-zinc-500" : ""}>
+                    {slot.label}
+                  </span>
+                </span>
+                <span className={isFull ? "text-red-400" : "text-zinc-300"}>
+                  {slot.issued} / {slot.capacity}
+                  {isFull ? "（満員）" : ""}
+                </span>
+              </div>
+            </Fragment>
           );
         })}
       </div>

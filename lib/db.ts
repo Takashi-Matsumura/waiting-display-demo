@@ -276,6 +276,14 @@ export function updateSlot(
   return getSlot(id);
 }
 
+/**
+ * 全ての整理券(予約)を削除する。時間枠(slots)自体の設定(表示名・時間・定員)は変更しない。
+ * 発行済みの整理券が紐づいているため削除できない時間枠を、削除可能な状態に戻す用途にも使う。
+ */
+export function resetAllTickets(): void {
+  getDb().prepare(`DELETE FROM tickets`).run();
+}
+
 /** 券が紐づく枠は削除できない（例外を投げる）。 */
 export function deleteSlot(id: number): void {
   const count = getDb()

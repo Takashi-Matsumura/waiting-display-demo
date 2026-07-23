@@ -35,11 +35,13 @@ export default function IssuanceStatus({
   totals,
   announcement,
   lunchBreak,
+  onLunchBreakClick,
 }: {
   slots: SlotStat[];
   totals: Totals | null;
   announcement: string;
   lunchBreak: LunchBreak | null;
+  onLunchBreakClick?: () => void;
 }) {
   const soldOut = totals !== null && totals.remaining <= 0 && totals.capacity > 0;
 
@@ -71,9 +73,15 @@ export default function IssuanceStatus({
           return (
             <Fragment key={slot.id}>
               {showLunchBreakBefore && (
-                <div className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed border-amber-400/30 bg-amber-400/5 px-4 py-2 text-sm font-medium text-amber-300 2xl:px-6 2xl:py-3 2xl:text-xl">
+                <button
+                  type="button"
+                  onClick={onLunchBreakClick}
+                  disabled={!onLunchBreakClick}
+                  className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed border-amber-400/30 bg-amber-400/5 px-4 py-2 text-sm font-medium text-amber-300 transition-colors 2xl:px-6 2xl:py-3 2xl:text-xl enabled:cursor-pointer enabled:hover:border-amber-400/60 enabled:hover:bg-amber-400/10"
+                  title={onLunchBreakClick ? "クリックでお昼休みモードに切り替え" : undefined}
+                >
                   お昼休み（{lunchBreak.startTime}〜{lunchBreak.endTime}）
-                </div>
+                </button>
               )}
               <div
                 className={`glass-card flex shrink-0 items-center justify-between rounded-lg px-4 py-2 text-sm transition-opacity 2xl:px-6 2xl:py-3 2xl:text-xl ${

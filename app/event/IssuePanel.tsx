@@ -201,7 +201,7 @@ export default function IssuePanel({
             )}
 
             {phase === "identifying" && !manual ? (
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-black/15 py-8 dark:border-white/15">
                 <span className="text-sm font-medium">タグをかざしてください…</span>
                 <button
                   type="button"
@@ -255,7 +255,7 @@ export default function IssuePanel({
             )}
 
             {phase === "completing" && !manual ? (
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-black/15 py-8 dark:border-white/15">
                 <span className="text-sm font-medium">もう一度同じタグをかざしてください…</span>
                 <button
                   type="button"

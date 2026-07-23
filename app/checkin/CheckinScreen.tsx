@@ -18,6 +18,7 @@ interface SlotStat {
   issued: number;
   checkedIn: number;
   remaining: number;
+  isPast?: boolean;
 }
 
 interface Totals {
@@ -27,6 +28,11 @@ interface Totals {
   remaining: number;
 }
 
+interface LunchBreak {
+  startTime: string;
+  endTime: string;
+}
+
 interface StatsResponse {
   slots: SlotStat[];
   totals: Totals;
@@ -34,6 +40,8 @@ interface StatsResponse {
   next: SlotStat | null;
   announcement: string;
   eventTitle: string;
+  lunchBreak: LunchBreak | null;
+  isLunchBreakNow: boolean;
 }
 
 const POLL_INTERVAL_MS = 2500;
@@ -78,6 +86,8 @@ export default function CheckinScreen() {
             current={data?.current ?? null}
             next={data?.next ?? null}
             totals={data?.totals ?? null}
+            lunchBreak={data?.lunchBreak ?? null}
+            isLunchBreakNow={data?.isLunchBreakNow ?? false}
           />
         </div>
         <div className="flex min-h-0 flex-col lg:pl-8 2xl:pl-12">
@@ -85,6 +95,7 @@ export default function CheckinScreen() {
             slots={data?.slots ?? []}
             totals={data?.totals ?? null}
             announcement={data?.announcement ?? ""}
+            lunchBreak={data?.lunchBreak ?? null}
           />
         </div>
       </div>

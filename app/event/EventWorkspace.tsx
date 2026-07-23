@@ -56,7 +56,7 @@ export default function EventWorkspace() {
   }
 
   return (
-    <div className={`mx-auto w-full ${meta.maxWidth} flex-1 px-6 py-10`}>
+    <div className={`mx-auto w-full ${meta.maxWidth} flex-1 px-6 py-10 2xl:max-w-[1900px] 2xl:px-16`}>
       <BackLink />
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-bold tracking-tight">{meta.title}</h1>

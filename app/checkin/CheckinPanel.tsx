@@ -62,6 +62,7 @@ export default function CheckinPanel() {
   const [latest, setLatest] = useState<DisplayResult | null>(null);
   const [manualInput, setManualInput] = useState("");
   const [manualBusy, setManualBusy] = useState(false);
+  const [manualVisible, setManualVisible] = useState(false);
 
   // NFC読取イベントのドレイン結果はSWRのonSuccessで受け取る(effect本体で直接setStateしない)。
   const { data } = useSWR<{ connected: boolean; tagPresent: boolean; results: CheckinResultPayload[] }>(
@@ -80,6 +81,9 @@ export default function CheckinPanel() {
   const tagPresent = data?.tagPresent ?? false;
   // NFC結果はタグがかざされている間だけ表示。手動入力の結果は常に表示する。
   const showResult = latest !== null && (latest.source === "manual" || tagPresent);
+  // 手動チェックインは緊急時の代替手段のため通常は隠す。NFCリーダー未接続時は
+  // 唯一のチェックイン手段になるため自動的に表示する。
+  const showManualForm = manualVisible || !connected;
 
   async function handleManualCheckin(e: React.FormEvent) {
     e.preventDefault();
@@ -161,21 +165,40 @@ export default function CheckinPanel() {
         )}
       </div>
 
-      <form onSubmit={handleManualCheckin} className="flex shrink-0 gap-2 2xl:gap-3">
-        <input
-          className="flex-1 rounded-md border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-sky-400/50 focus:outline-none 2xl:px-4 2xl:py-3 2xl:text-base"
-          placeholder="整理番号を手動入力（例: A-001）"
-          value={manualInput}
-          onChange={(e) => setManualInput(e.target.value)}
-        />
+      {showManualForm ? (
+        <form onSubmit={handleManualCheckin} className="flex shrink-0 gap-2 2xl:gap-3">
+          <input
+            className="flex-1 rounded-md border border-white/10 bg-slate-900/60 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-sky-400/50 focus:outline-none 2xl:px-4 2xl:py-3 2xl:text-base"
+            placeholder="整理番号を手動入力（例: A-001）"
+            value={manualInput}
+            onChange={(e) => setManualInput(e.target.value)}
+          />
+          <button
+            type="submit"
+            disabled={manualBusy}
+            className="rounded-full bg-gradient-to-b from-white to-slate-200 px-4 py-2 text-sm font-medium text-slate-950 shadow-[0_0_20px_-6px_rgba(255,255,255,0.35)] disabled:opacity-50 2xl:px-6 2xl:py-3 2xl:text-base"
+          >
+            手動チェックイン
+          </button>
+          {connected && (
+            <button
+              type="button"
+              onClick={() => setManualVisible(false)}
+              className="shrink-0 rounded-full px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300 2xl:text-sm"
+            >
+              閉じる
+            </button>
+          )}
+        </form>
+      ) : (
         <button
-          type="submit"
-          disabled={manualBusy}
-          className="rounded-full bg-gradient-to-b from-white to-slate-200 px-4 py-2 text-sm font-medium text-slate-950 shadow-[0_0_20px_-6px_rgba(255,255,255,0.35)] disabled:opacity-50 2xl:px-6 2xl:py-3 2xl:text-base"
+          type="button"
+          onClick={() => setManualVisible(true)}
+          className="shrink-0 self-start text-xs text-zinc-600 hover:text-zinc-400 2xl:text-sm"
         >
-          手動チェックイン
+          手動チェックインを表示（緊急時）
         </button>
-      </form>
+      )}
     </div>
   );
 }

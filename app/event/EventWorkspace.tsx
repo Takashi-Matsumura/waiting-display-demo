@@ -17,8 +17,7 @@ const MODE_META: Record<
   prepare: {
     label: "事前準備",
     title: "イベント準備",
-    description:
-      "時間枠の登録と、その枠でのNTAGへの整理番号書き込み（準備）をこの画面でまとめて行います。受付名は「整理券発行」モードで入力します。",
+    description: "",
     maxWidth: "max-w-6xl",
   },
   issue: {
@@ -56,38 +55,53 @@ export default function EventWorkspace() {
   }
 
   return (
-    <div className={`mx-auto w-full ${meta.maxWidth} flex-1 px-6 py-10`}>
-      <BackLink />
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">{meta.title}</h1>
-        <div className="inline-flex rounded-full border border-black/10 bg-white p-1 dark:border-white/10 dark:bg-zinc-900">
-          {(Object.keys(MODE_META) as Mode[]).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => handleModeChange(m)}
-              disabled={switchDisabled}
-              title={switchDisabled ? "タグの読み書き待ちの間はモードを切り替えられません" : undefined}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                m === mode
-                  ? "bg-foreground text-background"
-                  : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-              }`}
-            >
-              {MODE_META[m].label}
-            </button>
-          ))}
+    <div className="flex flex-1 flex-col">
+      <header className="sticky top-0 z-10 border-b border-black/10 bg-white/90 backdrop-blur dark:border-white/10 dark:bg-zinc-900/90">
+        <div
+          className={`mx-auto flex w-full ${meta.maxWidth} flex-wrap items-center justify-between gap-4 px-6 py-3 2xl:max-w-[1900px] 2xl:px-16`}
+        >
+          <div className="flex items-center gap-3">
+            <BackLink />
+            <h1 className="text-lg font-bold tracking-tight sm:text-xl">{meta.title}</h1>
+          </div>
+          <div className="inline-flex rounded-full border border-black/10 bg-zinc-100 p-1 dark:border-white/10 dark:bg-zinc-800">
+            {(Object.keys(MODE_META) as Mode[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => handleModeChange(m)}
+                disabled={switchDisabled}
+                title={switchDisabled ? "タグの読み書き待ちの間はモードを切り替えられません" : undefined}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  m === mode
+                    ? "bg-foreground text-background"
+                    : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                }`}
+              >
+                {MODE_META[m].label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{meta.description}</p>
+      </header>
 
-      <div className="mt-8 flex flex-col gap-6">
-        {mode === "issue" && <NfcStatusBar nfc={nfc} />}
-        {mode === "prepare" ? (
-          <EventSetupPanel onBusyChange={setPanelBusy} />
-        ) : (
-          <IssuePanel onBusyChange={setPanelBusy} />
+      <div
+        className={`mx-auto w-full ${meta.maxWidth} flex-1 px-6 pb-10 2xl:max-w-[1900px] 2xl:px-16 ${
+          meta.description ? "pt-10" : "pt-6"
+        }`}
+      >
+        {meta.description && (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">{meta.description}</p>
         )}
+
+        <div className={`flex flex-col gap-6 ${meta.description ? "mt-8" : ""}`}>
+          {mode === "issue" && <NfcStatusBar nfc={nfc} />}
+          {mode === "prepare" ? (
+            <EventSetupPanel onBusyChange={setPanelBusy} />
+          ) : (
+            <IssuePanel onBusyChange={setPanelBusy} />
+          )}
+        </div>
       </div>
     </div>
   );

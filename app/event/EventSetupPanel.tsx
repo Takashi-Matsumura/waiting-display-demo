@@ -570,6 +570,8 @@ export default function EventSetupPanel({
 
         <AnnouncementEditor />
 
+        <LunchVideoEditor />
+
         <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-white p-6 dark:border-red-900/40 dark:bg-zinc-900">
           <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
             全ての予約をリセット
@@ -743,6 +745,7 @@ function SlotTicketList({
 interface SettingsResponse {
   announcement: string;
   eventTitle: string;
+  lunchVideo: string;
 }
 
 /** 受付ディスプレイの見出し「受付」の前に表示するイベントタイトルの編集セクション。 */
@@ -837,6 +840,65 @@ function AnnouncementEditor() {
       <textarea
         className="min-h-[80px] rounded-md border border-black/15 px-3 py-2 text-sm dark:border-white/15 dark:bg-black"
         placeholder="例: 本日の整理券配布は終了しました。"
+        value={value}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setSaved(false);
+        }}
+      />
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="w-fit rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background disabled:opacity-50"
+        >
+          保存
+        </button>
+        {saved && <span className="text-sm text-green-700 dark:text-green-400">保存しました</span>}
+      </div>
+    </div>
+  );
+}
+
+/** お昼休み中に受付ディスプレイ・お昼休み画面で全画面再生する紹介動画の編集セクション。 */
+function LunchVideoEditor() {
+  const { data, mutate } = useSWR<SettingsResponse>("/api/settings", jsonFetcher);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const value = draft ?? data?.lunchVideo ?? "";
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lunchVideo: value }),
+      });
+      await mutate();
+      setDraft(null);
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-zinc-900">
+      <h3 className="text-lg font-semibold">お昼休み動画</h3>
+      <p className="text-xs text-zinc-500">
+        お昼休み中に受付ディスプレイ・お昼休み画面で全画面ループ再生する紹介動画です。public/
+        に置いた動画ファイル名（例: /lunch-movie.mp4）か、外部の動画URLを指定してください。空欄なら
+        お昼休み中も従来通りの受付表示のままになります。
+      </p>
+      <input
+        type="text"
+        className="rounded-md border border-black/15 px-3 py-2 text-sm dark:border-white/15 dark:bg-black"
+        placeholder="例: /lunch-movie.mp4"
         value={value}
         onChange={(e) => {
           setDraft(e.target.value);

@@ -1,4 +1,10 @@
-import { getSetting, getStats, SETTING_ANNOUNCEMENT, SETTING_EVENT_TITLE } from "@/lib/db";
+import {
+  getSetting,
+  getStats,
+  SETTING_ANNOUNCEMENT,
+  SETTING_EVENT_TITLE,
+  SETTING_LUNCH_VIDEO,
+} from "@/lib/db";
 import { classifySlots, findLunchBreak, isSlotPast, isWithinLunchBreak } from "@/lib/schedule";
 
 // 統合画面(受付/受付状況ディスプレイ)が数秒間隔でポーリングする読取専用エンドポイント。
@@ -26,5 +32,6 @@ export async function GET() {
     isLunchBreakNow,
     announcement: getSetting(SETTING_ANNOUNCEMENT) ?? "",
     eventTitle: getSetting(SETTING_EVENT_TITLE) ?? "",
+    lunchVideo: getSetting(SETTING_LUNCH_VIDEO) ?? "",
   });
 }

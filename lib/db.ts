@@ -577,6 +577,9 @@ export const SETTING_ANNOUNCEMENT = "announcement";
 /** 受付ディスプレイの見出しに表示するイベントタイトルの設定キー。 */
 export const SETTING_EVENT_TITLE = "event_title";
 
+/** お昼休み画面で全画面再生する動画のパス/URLの設定キー。 */
+export const SETTING_LUNCH_VIDEO = "lunch_video";
+
 export function getSetting(key: string): string | null {
   const row = getDb().prepare(`SELECT value FROM settings WHERE key = ?`).get(key) as
     | { value: string }

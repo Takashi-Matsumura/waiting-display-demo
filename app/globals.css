@@ -43,3 +43,50 @@ body {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
+
+/* 受付ディスプレイ⇄お昼休み表示の切り替えを、カードをめくるように見せるための3Dフリップ。
+   両面(通常表示/お昼休み表示)を同時にDOMへマウントしたまま、親の回転だけで見た目を切り替える。
+   両面は position:absolute ではなく grid-area で同一グリッドセルに重ねる。position:absolute
+   は祖先の height:100% パーセンテージ解決に依存するため、flex/grid が混在するこの階層では
+   高さが0に潰れることがあった。grid-area方式は祖先チェーンの高さ解決に依存しないため堅牢。 */
+.flip-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  perspective: 2000px;
+}
+
+.flip-card {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  /* 暗黙の1行1列を「auto(内容依存)」ではなく明示的に100%とすることで、内部のvideoなどが
+     height:100%を使って高さを解決する際に、祖先の高さが不定にならないようにする。
+     注意: overflow:hidden をここに付けると transform-style:preserve-3d が
+     ブラウザにより flat へ強制フラット化され、3Dフリップ自体が壊れる(裏表が同時に
+     鏡写しで見えてしまう)。overflow のクリップは各 .flip-face 側で行う。 */
+  grid-template-rows: 100%;
+  grid-template-columns: 100%;
+  transition: transform 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+}
+
+.flip-card.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.flip-face {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.flip-face-back {
+  transform: rotateY(180deg);
+}
